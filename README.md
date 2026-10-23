@@ -104,6 +104,12 @@ see "ANSI C/C++" below.</p>
 <code>LZHAM_DLL_VERSION</code> = 0x1010) are frozen. Builds for every supported architecture read and write
 the same streams, so data compressed on x64 can be decompressed on x86, ARM or ARM64.</p>
 
+<p>Streams from the pre-1.0 alpha builds (LZHAM_DLL_VERSION 0x1008 and earlier, the one with
+<code>lzham_polar_codes.cpp</code>) are <b>not</b> compatible with v1.x in either direction, exactly as the
+upstream release notes warned. The format changed before v1.0, and a stream carries no version marker
+(<code>send_configuration()</code> is a no-op), so a decoder cannot tell the two apart; a legacy alpha mode
+would have to be requested explicitly.</p>
+
 
 <h3>API</h3>
 
