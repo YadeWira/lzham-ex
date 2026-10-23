@@ -1,0 +1,150 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux:
+    name: Linux ${{ matrix.arch }} (${{ matrix.compiler }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            compiler: gcc
+            packages: ""
+          - arch: x86
+            compiler: gcc
+            packages: gcc-multilib g++-multilib
+            flags: -m32
+          - arch: x64
+            compiler: clang
+            packages: ""
+          - arch: arm64
+            compiler: gcc
+            packages: gcc-aarch64-linux-gnu g++-aarch64-linux-gnu qemu-user
+            cross: aarch64-linux-gnu
+            emulator: "qemu-aarch64;-L;/usr/aarch64-linux-gnu"
+          - arch: armv7
+            compiler: gcc
+            packages: gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf qemu-user
+            cross: arm-linux-gnueabihf
+            emulator: "qemu-arm;-L;/usr/arm-linux-gnueabihf"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install packages
+        if: matrix.packages != ''
+        run: sudo apt-get update && sudo apt-get install -y ${{ matrix.packages }}
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_FLAGS="${{ matrix.flags }}" \
+            -DCMAKE_CXX_FLAGS="${{ matrix.flags }}" \
+            ${{ matrix.cross != '' && format('-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR={0} -DCMAKE_C_COMPILER={0}-gcc -DCMAKE_CXX_COMPILER={0}-g++', matrix.cross) || '' }} \
+            ${{ matrix.compiler == 'clang' && '-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++' || '' }} \
+            ${{ matrix.emulator != '' && format('-DCMAKE_CROSSCOMPILING_EMULATOR={0}', matrix.emulator) || '' }}
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      # Only the native x64 GCC build installs and consumes the package.
+      - name: Install
+        if: matrix.arch == 'x64' && matrix.compiler == 'gcc'
+        run: |
+          cmake -S . -B build-pkg -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PWD/prefix"
+          cmake --build build-pkg --parallel
+          cmake --install build-pkg
+
+      - name: Consume installed package (CMake)
+        if: matrix.arch == 'x64' && matrix.compiler == 'gcc'
+        run: |
+          cmake -S tests/consumer -B build-consumer -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$PWD/prefix"
+          cmake --build build-consumer --parallel
+          export LD_LIBRARY_PATH="$(dirname "$(find "$PWD/prefix" -name 'liblzhamdll.so' | head -1)")"
+          ./build-consumer/lzham_consumer
+          ./build-consumer/lzham_consumer_static
+
+      - name: Consume installed package (pkg-config)
+        if: matrix.arch == 'x64' && matrix.compiler == 'gcc'
+        run: |
+          export PKG_CONFIG_PATH="$PWD/prefix/lib/pkgconfig"
+          export LD_LIBRARY_PATH="$(dirname "$(find "$PWD/prefix" -name 'liblzhamdll.so' | head -1)")"
+          cc tests/consumer/main.c -o pc_consumer $(pkg-config --cflags --libs lzham)
+          ./pc_consumer
+
+  windows:
+    name: Windows ${{ matrix.arch }} (MSVC)
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [ x64, Win32 ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -A ${{ matrix.arch }}
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Check DLL exports
+        shell: pwsh
+        run: |
+          $dll = Get-ChildItem -Recurse -Filter "lzham_x*.dll" build | Select-Object -First 1
+          if (-not $dll) { throw "DLL not found" }
+          $exports = dumpbin /nologo /exports $dll.FullName
+          foreach ($sym in @("lzham_get_version", "lzham_compress_init", "lzham_decompress", "lzham_z_compress")) {
+            if (-not ($exports -match $sym)) { throw "Missing export: $sym" }
+          }
+          Write-Host "Exports OK: $($dll.Name)"
+
+  macos:
+    name: macOS ${{ matrix.name }}
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: arm64
+            archs: arm64
+            target: "11.0"
+            run_tests: true
+          - name: universal
+            archs: "x86_64;arm64"
+            target: "11.0"
+            run_tests: true
+          - name: x86_64
+            archs: x86_64
+            target: "10.13"
+            run_tests: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="${{ matrix.archs }}" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="${{ matrix.target }}"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        if: matrix.run_tests
+        run: ctest --test-dir build --output-on-failure

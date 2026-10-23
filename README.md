@@ -3,8 +3,8 @@ LZHAM - Lossless Data Compression Codec
 
 Public Domain (see LICENSE)
 
-<p>LZHAM is a lossless data compression codec written in C/C++ (specifically C++03), with a compression ratio similar to LZMA but with 1.5x-8x faster decompression speed. It officially supports Linux x86/x64, Windows x86/x64, 
-OSX, and iOS, with Android support on the way.</p>
+<p>LZHAM is a lossless data compression codec written in C/C++ (specifically C++03), with a compression ratio similar to LZMA but with 1.5x-8x faster decompression speed. It officially supports Linux x86/x64/ARMv7/ARM64, Windows x86/x64 (Windows 7 or newer) and
+macOS x86_64/arm64. See "Platforms/Compiler Support" below.</p>
 
 An improved version of LZHAM, with better compression, is [here](https://github.com/richgel999/lzham_codec_devel).
 
@@ -85,19 +85,29 @@ written with v1.0. The only thing that could change this are critical bugfixes.<
 
 <h3>Platforms/Compiler Support</h3>
 
-LZHAM currently officially supports x86/x64 Linux, iOS, OSX, FreeBSD, and Windows x86/x64. At one time the codec compiled and ran fine on Xbox 360 (PPC, big endian). Android support is coming next.
-It should be easy to retarget by modifying the macros in lzham_core.h.</p>
+<p>This fork (lzham-ex) maintains the codec and its build system. Supported targets:</p>
 
-<p>LZHAM has optional support for multithreaded compression. It supports gcc built-ins or MSVC intrinsics for atomic ops. For threading, it supports OSX 
-specific Pthreads, generic Pthreads, or Windows API's.</p>
+<table>
+<tr><th>OS</th><th>Architectures</th><th>Compilers</th><th>Status</th></tr>
+<tr><td>Linux</td><td>x86, x64, ARMv7, ARM64</td><td>GCC, Clang</td><td>Tested natively and under QEMU</td></tr>
+<tr><td>Windows</td><td>x86, x64 (Windows 7 or newer)</td><td>MSVC 2019/2022, MinGW-w64</td><td>Tested on Windows 7 SP1 and Windows 10</td></tr>
+<tr><td>macOS</td><td>x86_64, arm64 (universal binaries supported)</td><td>Apple Clang</td><td>Built and tested in CI</td></tr>
+</table>
 
-<p>For compilers, I've tested with gcc, clang, and MSVC 2008, 2010, and 2013. In previous alphas I also compiled with TDM-GCC x64.</p>
+<p>Multithreaded compression uses Win32 threads or POSIX threads; atomic operations use MSVC intrinsics
+or GCC built-ins. The plain ANSI C/C++ fallback (no threads, no atomics) still exists for new ports;
+see "ANSI C/C++" below.</p>
+
+<p>The bitstream format and the public C ABI (<code>lzham_get_version()</code> returns
+<code>LZHAM_DLL_VERSION</code> = 0x1010) are frozen. Builds for every supported architecture read and write
+the same streams, so data compressed on x64 can be decompressed on x86, ARM or ARM64.</p>
+
 
 <h3>API</h3>
 
 LZHAM supports streaming or memory to memory compression/decompression. See include/lzham.h. LZHAM can be linked statically or dynamically, just study the 
 headers and the lzhamtest project. 
-On Linux/OSX, it's only been tested with static linking so far.
+On Linux/macOS both the static and the shared library are tested (the test app links the static one).
 
 LZHAM also supports a usable subset of the zlib API with extensions, either include/zlib.h or #define LZHAM_DEFINE_ZLIB_API and use include/lzham.h.
 
@@ -170,11 +180,46 @@ See lzhamtest_x86/x64.exe's help text for more command line parameters.
 
 <h3>Compiling LZHAM</h3>
 
-- Linux: Use "cmake ." then "make". The cmake script only supports Linux at the moment. (Sorry, working on build systems is a drag.)
-- OSX/iOS: Use the included XCode project. (NOTE: I haven't merged this over yet. It's coming!)
-- Windows: Use the included VS 2010 project
+The CMake build (CMake 3.15 or newer) is the supported one on every platform and produces:
+
+* the shared library: <code>liblzhamdll.so</code> / <code>liblzhamdll.dylib</code> (with SONAME/install name version 1),
+  or <code>lzham_x86.dll</code> / <code>lzham_x64.dll</code> on Windows;
+* the static library: <code>liblzhamlib.a</code>, or <code>lzhamlib_x86.lib</code> / <code>lzhamlib_x64.lib</code> on Windows;
+* <code>lzhamtest</code> (command line test tool) and <code>lzham_roundtrip_test</code> (registered with CTest).
+
+<pre>
+Linux / macOS:
+  cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+  cmake --build build -j
+  ctest --test-dir build --output-on-failure
+
+Windows (MSVC):
+  cmake -S . -B build -A x64
+  cmake --build build --config Release
+  ctest --test-dir build -C Release --output-on-failure
+  (use -A Win32 for x86)
+</pre>
+
+Common options: <code>LZHAM_BUILD_SHARED</code>, <code>LZHAM_BUILD_STATIC</code>, <code>LZHAM_BUILD_TESTS</code>,
+<code>LZHAM_ENABLE_MULTITHREADING</code>, <code>LZHAM_INSTALL</code> (all ON by default except none).
+
+Other configurations:
+
+* 32-bit Linux: <code>-DCMAKE_C_FLAGS=-m32 -DCMAKE_CXX_FLAGS=-m32</code>.
+* Cross-compiling ARM64/ARMv7: pass a toolchain file, or
+  <code>-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64
+  -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++</code>.
+  Add <code>-DCMAKE_CROSSCOMPILING_EMULATOR="qemu-aarch64;-L;/usr/aarch64-linux-gnu"</code> to run the tests under QEMU.
+* macOS universal binary: <code>-DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0</code>.
+* MinGW-w64: use a toolchain file; the DLLs and test executables are linked against the static
+  libgcc/libstdc++ runtime, so no extra DLLs are needed next to them.
+
+Installing: <code>cmake --install build --prefix /usr/local</code> installs the headers, the libraries and a CMake
+package (<code>find_package(lzham)</code>, targets <code>lzham::lzham</code> and <code>lzham::lzham_static</code>) plus
+a pkg-config file (<code>lzham.pc</code>).
 
 IMPORTANT: With clang or gcc compile LZHAM with "No strict aliasing" ENABLED: -fno-strict-aliasing
+(the CMake build does this for you).
 
 I DO NOT test or develop the codec with strict aliasing:
 * https://lkml.org/lkml/2003/2/26/158
