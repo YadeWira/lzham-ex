@@ -108,7 +108,8 @@ the same streams, so data compressed on x64 can be decompressed on x86, ARM or A
 <code>lzham_polar_codes.cpp</code>) are <b>not</b> compatible with v1.x in either direction, exactly as the
 upstream release notes warned. The format changed before v1.0, and a stream carries no version marker
 (<code>send_configuration()</code> is a no-op), so a decoder cannot tell the two apart; a legacy alpha mode
-would have to be requested explicitly.</p>
+would have to be requested explicitly. See <code>docs/legacy-0x1008.md</code> for the exact bitstream
+differences and what a decoder-only legacy mode would cost.</p>
 
 
 <h3>API</h3>
