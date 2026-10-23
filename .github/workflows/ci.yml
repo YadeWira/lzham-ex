@@ -18,21 +18,26 @@ jobs:
           - arch: x64
             compiler: gcc
             packages: ""
+            processor: x86_64
           - arch: x86
             compiler: gcc
             packages: gcc-multilib g++-multilib
+            processor: i686
             flags: -m32
           - arch: x64
             compiler: clang
             packages: ""
+            processor: x86_64
           - arch: arm64
             compiler: gcc
             packages: gcc-aarch64-linux-gnu g++-aarch64-linux-gnu qemu-user
+            processor: aarch64
             cross: aarch64-linux-gnu
             emulator: "qemu-aarch64;-L;/usr/aarch64-linux-gnu"
           - arch: armv7
             compiler: gcc
             packages: gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf qemu-user
+            processor: armv7l
             cross: arm-linux-gnueabihf
             emulator: "qemu-arm;-L;/usr/arm-linux-gnueabihf"
     steps:
@@ -44,13 +49,27 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -S . -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_FLAGS="${{ matrix.flags }}" \
-            -DCMAKE_CXX_FLAGS="${{ matrix.flags }}" \
-            ${{ matrix.cross != '' && format('-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR={0} -DCMAKE_C_COMPILER={0}-gcc -DCMAKE_CXX_COMPILER={0}-g++', matrix.cross) || '' }} \
-            ${{ matrix.compiler == 'clang' && '-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++' || '' }} \
-            ${{ matrix.emulator != '' && format('-DCMAKE_CROSSCOMPILING_EMULATOR={0}', matrix.emulator) || '' }}
+          args=(-S . -B build -DCMAKE_BUILD_TYPE=Release)
+          # The emulator value contains semicolons, so every argument is kept in an array element
+          # and passed quoted: letting the shell split it turns "-L" into a command.
+          if [ -n "${{ matrix.flags }}" ]; then
+            args+=("-DCMAKE_C_FLAGS=${{ matrix.flags }}" "-DCMAKE_CXX_FLAGS=${{ matrix.flags }}")
+          fi
+          if [ -n "${{ matrix.cross }}" ]; then
+            args+=(
+              -DCMAKE_SYSTEM_NAME=Linux
+              "-DCMAKE_SYSTEM_PROCESSOR=${{ matrix.processor }}"
+              "-DCMAKE_C_COMPILER=${{ matrix.cross }}-gcc"
+              "-DCMAKE_CXX_COMPILER=${{ matrix.cross }}-g++"
+            )
+          fi
+          if [ -n "${{ matrix.emulator }}" ]; then
+            args+=("-DCMAKE_CROSSCOMPILING_EMULATOR=${{ matrix.emulator }}")
+          fi
+          if [ "${{ matrix.compiler }}" = "clang" ]; then
+            args+=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)
+          fi
+          cmake "${args[@]}"
 
       - name: Build
         run: cmake --build build --parallel
@@ -107,11 +126,31 @@ jobs:
         run: |
           $dll = Get-ChildItem -Recurse -Filter "lzham_x*.dll" build | Select-Object -First 1
           if (-not $dll) { throw "DLL not found" }
-          $exports = dumpbin /nologo /exports $dll.FullName
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $dumpbin = Get-ChildItem -Path (Join-Path $vsPath "VC\Tools\MSVC") -Recurse -Filter dumpbin.exe |
+                     Where-Object { $_.FullName -like "*Hostx64\x64*" } | Select-Object -First 1
+          if (-not $dumpbin) { throw "dumpbin not found" }
+          $exports = & $dumpbin.FullName /nologo /exports $dll.FullName
           foreach ($sym in @("lzham_get_version", "lzham_compress_init", "lzham_decompress", "lzham_z_compress")) {
             if (-not ($exports -match $sym)) { throw "Missing export: $sym" }
           }
           Write-Host "Exports OK: $($dll.Name)"
+
+      - name: Run the CLI against the DLL
+        shell: pwsh
+        run: |
+          $dir = (Get-ChildItem -Recurse -Filter "lzhamtest.exe" build | Select-Object -First 1).DirectoryName
+          $input = Join-Path $PWD "ci_input.bin"
+          $bytes = New-Object byte[] 200000
+          for ($i = 0; $i -lt $bytes.Length; $i++) { $bytes[$i] = ($i * 7 + ($i -shr 8)) -band 0xFF }
+          [System.IO.File]::WriteAllBytes($input, $bytes)
+          & "$dir\lzhamtest.exe" c $input "$PWD\ci_compressed.lzham"
+          if ($LASTEXITCODE -ne 0) { throw "compression failed" }
+          & "$dir\lzhamtest.exe" d "$PWD\ci_compressed.lzham" "$PWD\ci_roundtrip.bin"
+          if ($LASTEXITCODE -ne 0) { throw "decompression failed" }
+          if ((Get-FileHash $input).Hash -ne (Get-FileHash "$PWD\ci_roundtrip.bin").Hash) { throw "roundtrip mismatch" }
+          Write-Host "lzhamtest roundtrip OK"
 
   macos:
     name: macOS ${{ matrix.name }}
