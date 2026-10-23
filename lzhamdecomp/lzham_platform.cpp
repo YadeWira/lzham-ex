@@ -61,8 +61,20 @@ void lzham_debug_break(void)
 {
 #if LZHAM_USE_WIN32_API
    DebugBreak();
-#elif (TARGET_OS_MAC == 1) && (TARGET_IPHONE_SIMULATOR == 0) && (TARGET_OS_IPHONE == 0)
-   __asm {int 3}
+#elif defined(__has_builtin)
+   #if __has_builtin(__builtin_debugtrap)
+      __builtin_debugtrap();
+   #elif __has_builtin(__builtin_trap)
+      __builtin_trap();
+   #else
+      assert(0);
+   #endif
+#elif defined(__GNUC__) || defined(__clang__)
+   #if LZHAM_CPU_X86 || LZHAM_CPU_X64
+      __asm__ __volatile__("int $3");
+   #else
+      __builtin_trap();
+   #endif
 #else
    assert(0);
 #endif

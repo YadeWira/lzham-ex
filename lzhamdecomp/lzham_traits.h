@@ -67,11 +67,9 @@ namespace lzham
    // Defines type Q as bitwise copyable.
 #define LZHAM_DEFINE_BITWISE_COPYABLE(Q) template<> struct bitwise_copyable<Q> { enum { cFlag = true }; };
 
-#if defined(__APPLE__) || defined(__NetBSD__)
-   #define LZHAM_IS_POD(T) std::__is_pod<T>::__value
-#else
-   #define LZHAM_IS_POD(T) __is_pod(T)
-#endif
+// __is_pod() is a builtin in GCC, Clang and MSVC. libc++ removed std::__is_pod, which used to be
+// needed on Apple/NetBSD and broke every modern macOS build of the codec.
+#define LZHAM_IS_POD(T) __is_pod(T)
 
 #define LZHAM_IS_SCALAR_TYPE(T) (scalar_type<T>::cFlag)
 

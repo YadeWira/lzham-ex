@@ -17,12 +17,15 @@ using namespace lzham;
 
 #define LZHAM_MEM_STATS 0
 
-#ifndef LZHAM_USE_WIN32_API
-   #ifndef __APPLE__
-      #define _msize malloc_usable_size
-   #else
-      #define _msize malloc_size
-   #endif
+// _msize() is the whole-allocation-size query. It comes from the C runtime, not from the threading
+// backend, so this must be keyed on the platform (a Windows build with LZHAM_ANSI_CPLUSPLUS has no
+// LZHAM_USE_WIN32_API but still uses the MSVC/UCRT heap).
+#if defined(_WIN32) || defined(__CYGWIN__)
+   // _msize() is provided by the CRT.
+#elif defined(__APPLE__)
+   #define _msize malloc_size
+#else
+   #define _msize malloc_usable_size
 #endif
 
 namespace lzham

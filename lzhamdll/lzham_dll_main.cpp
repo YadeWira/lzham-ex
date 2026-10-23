@@ -2,22 +2,23 @@
 // LZHAM is in the Public Domain. Please see the Public Domain declaration at the end of include/lzham.h
 #include "lzham_core.h"
 
-BOOL APIENTRY DllMain(HANDLE hModule, DWORD fdwReason, LPVOID lpReserved)
-{
-   hModule, fdwReason, lpReserved;
+#if defined(_WIN32) && !defined(LZHAM_ANSI_CPLUSPLUS)
+   BOOL APIENTRY DllMain(HANDLE hModule, DWORD fdwReason, LPVOID lpReserved)
+   {
+      hModule, fdwReason, lpReserved;
 
-   switch( fdwReason ) 
-   { 
-      case DLL_PROCESS_ATTACH:
+      switch( fdwReason )
       {
-         break;
+         case DLL_PROCESS_ATTACH:
+         {
+            break;
+         }
+         case DLL_PROCESS_DETACH:
+         {
+            break;
+         }
       }
-      case DLL_PROCESS_DETACH:
-      {
-         break;
-      }
+
+      return TRUE;
    }
-
-   return TRUE;
-}
-
+#endif

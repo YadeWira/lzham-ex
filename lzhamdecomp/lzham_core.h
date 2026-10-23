@@ -14,6 +14,50 @@
    #define LZHAM_ANSI_CPLUSPLUS 1
 #endif
 
+// --- CPU architecture detection.
+// New platform code should test these macros instead of the compiler's built-ins.
+#if defined(_M_X64) || defined(__x86_64__) || defined(__amd64__)
+   #define LZHAM_CPU_X64 1
+#else
+   #define LZHAM_CPU_X64 0
+#endif
+
+#if defined(_M_IX86) || defined(__i386__) || defined(__i486__) || defined(__i586__) || defined(__i686__)
+   #define LZHAM_CPU_X86 1
+#else
+   #define LZHAM_CPU_X86 0
+#endif
+
+#if defined(_M_ARM64) || defined(__aarch64__) || defined(__arm64__)
+   #define LZHAM_CPU_ARM64 1
+#else
+   #define LZHAM_CPU_ARM64 0
+#endif
+
+#if defined(_M_ARM) || defined(__arm__)
+   #define LZHAM_CPU_ARM 1
+#else
+   #define LZHAM_CPU_ARM 0
+#endif
+
+// --- CPU endianness detection.
+// Define LZHAM_CPU_BIG_ENDIAN to 0 or 1 before including this header to override the detection.
+#ifndef LZHAM_CPU_BIG_ENDIAN
+   #if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__)
+      #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+         #define LZHAM_CPU_BIG_ENDIAN 1
+      #else
+         #define LZHAM_CPU_BIG_ENDIAN 0
+      #endif
+   #elif defined(__BIG_ENDIAN__) && __BIG_ENDIAN__
+      #define LZHAM_CPU_BIG_ENDIAN 1
+   #elif defined(WORDS_BIGENDIAN) || defined(_M_PPC) || defined(_XBOX)
+      #define LZHAM_CPU_BIG_ENDIAN 1
+   #else
+      #define LZHAM_CPU_BIG_ENDIAN 0
+   #endif
+#endif
+
 #if defined(__APPLE__) && defined(__MACH__)
    // Apple OSX and iOS
    #include <TargetConditionals.h>
@@ -30,7 +74,6 @@
    #define LZHAM_USE_WIN32_ATOMIC_FUNCTIONS 1
    #define LZHAM_64BIT_POINTERS 0
    #define LZHAM_CPU_HAS_64BIT_REGISTERS 1
-   #define LZHAM_BIG_ENDIAN_CPU 1
    #define LZHAM_USE_UNALIGNED_INT_LOADS 1
    #define LZHAM_RESTRICT __restrict
    #define LZHAM_FORCE_INLINE __forceinline
@@ -50,8 +93,9 @@
    #endif
    #define NOMINMAX
 
-    #ifndef _WIN32_WINNT
-      #define _WIN32_WINNT 0x500
+   // Windows 7 is the minimum supported OS. The old default (0x500) targeted Windows 2000.
+   #ifndef _WIN32_WINNT
+      #define _WIN32_WINNT 0x0601
    #endif
 
    #ifndef WIN32_LEAN_AND_MEAN
@@ -70,16 +114,18 @@
 
    #define LZHAM_PLATFORM_PC 1
 
-   #ifdef _WIN64
+   #if LZHAM_CPU_X64
       #define LZHAM_PLATFORM_PC_X64 1
+   #elif LZHAM_CPU_X86
+      #define LZHAM_PLATFORM_PC_X86 1
+   #endif
+
+   #ifdef _WIN64
       #define LZHAM_64BIT_POINTERS 1
       #define LZHAM_CPU_HAS_64BIT_REGISTERS 1
-      #define LZHAM_LITTLE_ENDIAN_CPU 1
    #else
-      #define LZHAM_PLATFORM_PC_X86 1
       #define LZHAM_64BIT_POINTERS 0
       #define LZHAM_CPU_HAS_64BIT_REGISTERS 0
-      #define LZHAM_LITTLE_ENDIAN_CPU 1
    #endif
 
    #define LZHAM_USE_UNALIGNED_INT_LOADS 1
@@ -93,100 +139,66 @@
    #define LZHAM_NOTE_UNUSED(x) (void)x
 
 #elif defined(__APPLE__) && !defined(LZHAM_ANSI_CPLUSPLUS)
-   // --- Apple: iOS or OSX
+   // --- Apple: iOS or macOS
    #if (TARGET_IPHONE_SIMULATOR == 1) || (TARGET_OS_IPHONE == 1)
       #define LZHAM_PLATFORM_PC 0
-
-      #if defined(_WIN64) || defined(__MINGW64__) || defined(_LP64) || defined(__LP64__)
-         #define LZHAM_PLATFORM_PC_X64 0
-         #define LZHAM_64BIT_POINTERS 1
-         #define LZHAM_CPU_HAS_64BIT_REGISTERS 1
-      #else
-         #define LZHAM_PLATFORM_PC_X86 0
-         #define LZHAM_64BIT_POINTERS 0
-         #define LZHAM_CPU_HAS_64BIT_REGISTERS 0
-      #endif
-
       #define LZHAM_USE_UNALIGNED_INT_LOADS 0
-
-      #if __BIG_ENDIAN__
-         #define LZHAM_BIG_ENDIAN_CPU 1
-      #else
-         #define LZHAM_LITTLE_ENDIAN_CPU 1
-      #endif
-
-      #define LZHAM_USE_PTHREADS_API 1
-      #define LZHAM_USE_GCC_ATOMIC_BUILTINS 1
-
-      #define LZHAM_RESTRICT
-
-      #if defined(__clang__)
-         #define LZHAM_FORCE_INLINE inline
-      #else
-         #define LZHAM_FORCE_INLINE inline __attribute__((__always_inline__,__gnu_inline__))
-      #endif
-
-      #define LZHAM_NOTE_UNUSED(x) (void)x
-
    #elif (TARGET_OS_MAC == 1)
       #define LZHAM_PLATFORM_PC 1
-
-      #if defined(_WIN64) || defined(__MINGW64__) || defined(_LP64) || defined(__LP64__)
-         #define LZHAM_PLATFORM_PC_X64 1
-         #define LZHAM_64BIT_POINTERS 1
-         #define LZHAM_CPU_HAS_64BIT_REGISTERS 1
-      #else
-         #define LZHAM_PLATFORM_PC_X86 1
-         #define LZHAM_64BIT_POINTERS 0
-         #define LZHAM_CPU_HAS_64BIT_REGISTERS 0
-      #endif
-
       #define LZHAM_USE_UNALIGNED_INT_LOADS 1
-
-      #if __BIG_ENDIAN__
-         #define LZHAM_BIG_ENDIAN_CPU 1
-      #else
-         #define LZHAM_LITTLE_ENDIAN_CPU 1
-      #endif
-
-      #define LZHAM_USE_PTHREADS_API 1
-      #define LZHAM_USE_GCC_ATOMIC_BUILTINS 1
-
-      #define LZHAM_RESTRICT
-
-      #if defined(__clang__)
-         #define LZHAM_FORCE_INLINE inline
-      #else
-         #define LZHAM_FORCE_INLINE inline __attribute__((__always_inline__,__gnu_inline__))
-      #endif
-
-      #define LZHAM_NOTE_UNUSED(x) (void)x
-   #elif
+   #else
       #error TODO: Unknown Apple target
    #endif
 
-#elif defined(__linux__) && (defined(__i386__) || defined(__x86_64__)) && !defined(LZHAM_ANSI_CPLUSPLUS) 
-   // --- Generic GCC/clang path for x86/x64, clang or GCC, Linux, OSX, FreeBSD or NetBSD, pthreads for threading, GCC built-ins for atomic ops.
-   #define LZHAM_PLATFORM_PC 1
-
-   #if defined(_LP64) || defined(__LP64__) || defined(__x86_64__)
-      // 64-bit build assumes pointers are always 64-bit
+   #if LZHAM_CPU_X64
       #define LZHAM_PLATFORM_PC_X64 1
+   #elif LZHAM_CPU_X86
+      #define LZHAM_PLATFORM_PC_X86 1
+   #endif
+
+   #if defined(_LP64) || defined(__LP64__) || defined(_WIN64) || defined(__MINGW64__)
       #define LZHAM_64BIT_POINTERS 1
       #define LZHAM_CPU_HAS_64BIT_REGISTERS 1
    #else
-      #define LZHAM_PLATFORM_PC_X86 1
       #define LZHAM_64BIT_POINTERS 0
       #define LZHAM_CPU_HAS_64BIT_REGISTERS 0
    #endif
 
-   #define LZHAM_USE_UNALIGNED_INT_LOADS 1
+   #define LZHAM_USE_PTHREADS_API 1
+   #define LZHAM_USE_GCC_ATOMIC_BUILTINS 1
 
-   #if __BIG_ENDIAN__
-      #define LZHAM_BIG_ENDIAN_CPU 1
+   #define LZHAM_RESTRICT
+
+   #if defined(__clang__)
+      #define LZHAM_FORCE_INLINE inline
    #else
-      #define LZHAM_LITTLE_ENDIAN_CPU 1
+      #define LZHAM_FORCE_INLINE inline __attribute__((__always_inline__,__gnu_inline__))
    #endif
+
+   #define LZHAM_NOTE_UNUSED(x) (void)x
+
+#elif (defined(__linux__) || defined(__unix__)) && !defined(LZHAM_ANSI_CPLUSPLUS)
+   // --- Generic GCC/clang POSIX path: Linux or Android on x86, x64, ARM or ARM64.
+   // pthreads for threading, GCC built-ins for atomic ops.
+   #define LZHAM_PLATFORM_PC 1
+
+   #if LZHAM_CPU_X64
+      #define LZHAM_PLATFORM_PC_X64 1
+   #elif LZHAM_CPU_X86
+      #define LZHAM_PLATFORM_PC_X86 1
+   #endif
+
+   #if LZHAM_CPU_X64 || LZHAM_CPU_ARM64
+      #define LZHAM_64BIT_POINTERS 1
+      #define LZHAM_CPU_HAS_64BIT_REGISTERS 1
+   #else
+      #define LZHAM_64BIT_POINTERS 0
+      #define LZHAM_CPU_HAS_64BIT_REGISTERS 0
+   #endif
+
+   // The codec reads/writes 32-bit values through lzham::load_unaligned_uint32()/store helpers,
+   // which are safe on every CPU (including ARMv5 and strict-alignment targets).
+   #define LZHAM_USE_UNALIGNED_INT_LOADS 1
 
    #define LZHAM_USE_PTHREADS_API 1
    #define LZHAM_USE_GCC_ATOMIC_BUILTINS 1
@@ -205,7 +217,7 @@
 
    // --- Vanilla ANSI-C/C++
    // No threading support, unaligned loads are NOT okay, no atomic ops.
-   #if defined(_WIN64) || defined(__MINGW64__) || defined(_LP64) || defined(__LP64__)
+   #if LZHAM_CPU_X64 || LZHAM_CPU_ARM64
       #define LZHAM_64BIT_POINTERS 1
       #define LZHAM_CPU_HAS_64BIT_REGISTERS 1
    #else
@@ -215,12 +227,6 @@
 
    #define LZHAM_USE_UNALIGNED_INT_LOADS 0
 
-   #if __BIG_ENDIAN__
-      #define LZHAM_BIG_ENDIAN_CPU 1
-   #else
-      #define LZHAM_LITTLE_ENDIAN_CPU 1
-   #endif
-
    #define LZHAM_USE_GCC_ATOMIC_BUILTINS 0
    #define LZHAM_USE_WIN32_ATOMIC_FUNCTIONS 0
 
@@ -228,6 +234,15 @@
    #define LZHAM_FORCE_INLINE inline
 
    #define LZHAM_NOTE_UNUSED(x) (void)x
+#endif
+
+// Map the detected CPU endianness onto the legacy per-endianness macros used throughout the codec.
+#if LZHAM_CPU_BIG_ENDIAN
+   #define LZHAM_BIG_ENDIAN_CPU 1
+   #define LZHAM_LITTLE_ENDIAN_CPU 0
+#else
+   #define LZHAM_BIG_ENDIAN_CPU 0
+   #define LZHAM_LITTLE_ENDIAN_CPU 1
 #endif
 
 #if LZHAM_LITTLE_ENDIAN_CPU

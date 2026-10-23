@@ -201,17 +201,19 @@ namespace lzham
                   break;
 #else
             // Compare a qword at a time for a bit more efficiency.
-            const uint64* pComp_end = reinterpret_cast<const uint64*>(pComp + max_match_len - 7);
-            const uint64* pComp_cur = reinterpret_cast<const uint64*>(pComp);
-            const uint64* pIns_cur = reinterpret_cast<const uint64*>(pIns);
+            // The loads must go through lzham::load_unaligned_uint64(): a plain uint64* dereference
+            // makes GCC emit LDRD, which faults on unaligned addresses on 32-bit ARM.
+            const uint8* pComp_end = pComp + max_match_len - 7;
+            const uint8* pComp_cur = pComp;
+            const uint8* pIns_cur = pIns;
             while (pComp_cur < pComp_end)
             {
-               if (*pComp_cur != *pIns_cur)
+               if (lzham::load_unaligned_uint64(pComp_cur) != lzham::load_unaligned_uint64(pIns_cur))
                   break;
-               pComp_cur++;
-               pIns_cur++;
+               pComp_cur += sizeof(uint64);
+               pIns_cur += sizeof(uint64);
             }
-            uint alt_match_len = static_cast<uint>(reinterpret_cast<const uint8*>(pComp_cur) - reinterpret_cast<const uint8*>(pComp));
+            uint alt_match_len = static_cast<uint>(pComp_cur - pComp);
             for ( ; alt_match_len < max_match_len; alt_match_len++)
                if (pComp[alt_match_len] != pIns[alt_match_len])
                   break;
