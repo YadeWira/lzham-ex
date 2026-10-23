@@ -4,6 +4,13 @@
 
 namespace lzham
 {
+   // Maximum number of elements a vector can hold. The size/capacity counters are 32-bit, so this cannot be
+   // raised past 0xFFFFFFFF (see upstream issue #19). Tests lower it to exercise the limit without having to
+   // allocate gigabytes.
+   #ifndef LZHAM_MAX_VECTOR_ELEMENTS
+      #define LZHAM_MAX_VECTOR_ELEMENTS 0xFFFFFFFFU
+   #endif
+
    struct elemental_vector
    {
       void* m_p;
@@ -249,7 +256,7 @@ namespace lzham
 
          // m_size and m_capacity are 32-bit: "m_size + n" would wrap around and turn a >4 GB append into a
          // small allocation followed by an out-of-bounds memcpy (upstream issue #19).
-         if (n > (0xFFFFFFFFU - m_size))
+         if (n > (LZHAM_MAX_VECTOR_ELEMENTS - m_size))
             return false;
 
          const uint orig_size = m_size;

@@ -250,6 +250,39 @@ if(LZHAM_BUILD_TESTS)
     endif()
 
     add_test(NAME lzham_roundtrip COMMAND lzham_roundtrip_test)
+
+    # A second copy of the library with the element limit lowered to 8 MB, so the 4 GB compressed-stream limit
+    # (upstream issue #19) can be tested in seconds instead of allocating gigabytes.
+    add_library(lzham_limits STATIC
+        ${LZHAM_DECOMP_SOURCES}
+        ${LZHAM_COMP_SOURCES}
+        lzhamlib/lzham_lib.cpp)
+    lzham_configure_target(lzham_limits)
+    target_compile_definitions(lzham_limits PRIVATE LZHAM_MAX_VECTOR_ELEMENTS=0x800000)
+    target_include_directories(lzham_limits PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/lzhamdecomp
+        ${CMAKE_CURRENT_SOURCE_DIR}/lzhamcomp)
+    if(NOT WIN32)
+        find_package(Threads REQUIRED)
+        target_link_libraries(lzham_limits PRIVATE Threads::Threads m)
+    endif()
+
+    add_executable(lzham_output_limit_test tests/test_output_limit.c)
+    target_include_directories(lzham_output_limit_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    if(MSVC)
+        target_compile_options(lzham_output_limit_test PRIVATE /W3)
+    else()
+        target_compile_options(lzham_output_limit_test PRIVATE -Wall -Wextra)
+    endif()
+    if(MINGW)
+        target_link_options(lzham_output_limit_test PRIVATE -static-libgcc -static-libstdc++)
+    endif()
+    target_link_libraries(lzham_output_limit_test PRIVATE lzham_limits)
+    set_target_properties(lzham_output_limit_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
+
+    add_test(NAME lzham_output_limit COMMAND lzham_output_limit_test)
 endif()
 
 # --- Install ---

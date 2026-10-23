@@ -445,7 +445,7 @@ namespace lzham
    bool lzcompressor::append_output()
    {
       const vector<uint8>& buf = m_codec.get_encoding_buf();
-      if (buf.size() > (0xFFFFFFFFU - m_comp_buf.size()))
+      if (buf.size() > (LZHAM_MAX_VECTOR_ELEMENTS - m_comp_buf.size()))
       {
          m_output_limit_hit = true;
          return false;

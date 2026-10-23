@@ -28,8 +28,8 @@ namespace lzham
       // m_capacity is 32-bit, so the rounded-up capacity must be clamped instead of truncated: next_pow2()
       // turns a request just above 2 GB into 4 GB, which would wrap to zero and make the vector report room
       // it does not have. Clamping keeps every capacity the caller actually asked for.
-      if (new_capacity > 0xFFFFFFFFULL)
-         new_capacity = 0xFFFFFFFFULL;
+      if (new_capacity > (size_t)LZHAM_MAX_VECTOR_ELEMENTS)
+         new_capacity = (size_t)LZHAM_MAX_VECTOR_ELEMENTS;
 
       LZHAM_ASSERT(new_capacity && (new_capacity > m_capacity));
 

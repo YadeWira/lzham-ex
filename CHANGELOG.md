@@ -68,7 +68,8 @@ codec declares `LZHAM_DLL_VERSION` = 0x1010 (1.0.1), and upstream's frozen bitst
   past its end. Growth is now checked and refused, and the API returns the new
   `LZHAM_COMP_STATUS_FAILED_OUTPUT_LIMIT` (instead of corrupting memory or calling `exit()` through
   `LZHAM_FAIL`). `LZHAM_COMP_STATUS_FAILED_ALLOC` was added for allocation failures, and the 4 GB per-call
-  limit is documented in `lzham.h`.
+  limit is documented in `lzham.h`. Covered by `tests/test_output_limit.c`, which links a second copy of the
+  library with the limit lowered to 8 MB so the failure path runs in about a second.
 - **#22** (`lzham_z_compress2` failed with `lzham_z_compressBound()` buffers): the bound assumed 0.098%
   expansion, but incompressible data is stored as raw blocks and costs about 0.122% with the 4 KB blocks of
   the zlib API, so compressing more than ~700 KB of incompressible data returned `Z_BUF_ERROR`.
