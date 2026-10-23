@@ -5,6 +5,32 @@ All notable changes to this fork are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The public C ABI (`LZHAM_DLL_VERSION` = 0x1010) and the
 bitstream format are frozen and do not change between 1.x releases.
 
+## [1.0.2] - 2026-10-23
+
+### Added
+
+- `tools/lzham_ref.py`: self-contained reference decoder for LZHAM 1.0 streams. It documents the format
+  (blocks, arithmetic-coded flags, implicitly updated Huffman tables, rep matches, delta literals, huge
+  matches, trailing Adler-32) in readable form.
+- `tools/lzham_compress.c`: deterministic raw-stream compressor CLI, the counterpart of the reference decoder.
+- `tools/test_reference.py`: roundtrips five fixtures x dict 15/20 x levels 0/2/4; registered with CTest as
+  `lzham_reference_decoder`.
+- `docs/legacy-0x1008.md`: the exact bitstream differences between the pre-1.0 alpha line (0x1008, polar
+  codes) and 1.0, and what a decoder-only legacy mode would cost.
+
+### Fixed
+
+- Undefined behaviour reported by UBSan: `vector::operator=`, the copy constructor, `construct_array()`,
+  `erase()` and `set_all()` called `memcpy`/`memset` with a zero length and null pointers for empty
+  containers. Found by zpaq-std running 46,426 blocks through its `codec_check` under ASan+UBSan; no
+  behaviour change.
+
+### Verified
+
+- The reference decoder was checked against 45 real streams (five corpus files x dict 15/20/26 x levels
+  0/2/4) and, independently, against 176 streams decoded by zpaq-std's ZPAQL implementation of the 1.0
+  format.
+
 ## [1.0.1] - 2026-10-23
 
 First maintained release. The version continues the upstream lineage instead of restarting at 1.0.0: the

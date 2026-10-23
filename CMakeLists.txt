@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 
 project(lzham
-    VERSION 1.0.1
+    VERSION 1.0.2
     DESCRIPTION "LZHAM - lossless data compression codec with LZMA-like ratios and fast decompression"
     LANGUAGES C CXX)
 
