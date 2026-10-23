@@ -187,6 +187,10 @@ The x86 version defaults to 64MB (26), and the x64 version defaults to 256MB (28
 
 See lzhamtest_x86/x64.exe's help text for more command line parameters.
 
+Note that <code>lzhamtest</code> writes a small container around the stream (the 4-byte magic <code>LZH0</code>,
+the dictionary size log2 and the source size) because it is a test harness. Use the library's memory API, or
+<code>tools/lzham_compress</code>, when you need a bare LZHAM stream.
+
 <h3>Compiling LZHAM</h3>
 
 The CMake build (CMake 3.15 or newer) is the supported one on every platform and produces:

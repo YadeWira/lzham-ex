@@ -283,6 +283,32 @@ if(LZHAM_BUILD_TESTS)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
 
     add_test(NAME lzham_output_limit COMMAND lzham_output_limit_test)
+
+    # Raw-stream compressor used to check the reference decoder in tools/lzham_ref.py.
+    add_executable(lzham_compress tools/lzham_compress.c)
+    target_include_directories(lzham_compress PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    if(MSVC)
+        target_compile_options(lzham_compress PRIVATE /W3)
+    else()
+        target_compile_options(lzham_compress PRIVATE -Wall -Wextra)
+    endif()
+    set_target_properties(lzham_compress PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
+    if(LZHAM_BUILD_STATIC)
+        target_link_libraries(lzham_compress PRIVATE lzhamlib)
+    else()
+        target_link_libraries(lzham_compress PRIVATE lzhamdll)
+    endif()
+
+    # The reference decoder is the executable specification of the format. The test is skipped when
+    # cross-compiling because the script has to run the freshly built compressor.
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND AND NOT CMAKE_CROSSCOMPILING)
+        add_test(NAME lzham_reference_decoder
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_reference.py
+                    $<TARGET_FILE:lzham_compress>
+                    ${CMAKE_CURRENT_BINARY_DIR}/reference_test)
+    endif()
 endif()
 
 # --- Install ---
