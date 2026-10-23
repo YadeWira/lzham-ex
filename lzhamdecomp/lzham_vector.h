@@ -60,7 +60,7 @@ namespace lzham
 
          m_size = other.m_size;
 
-         if (LZHAM_IS_BITWISE_COPYABLE(T))
+         if ((m_size) && (LZHAM_IS_BITWISE_COPYABLE(T)))
             memcpy(m_p, other.m_p, m_size * sizeof(T));
          else
          {
@@ -105,7 +105,7 @@ namespace lzham
             }
          }
 
-         if (LZHAM_IS_BITWISE_COPYABLE(T))
+         if ((other.m_size) && (LZHAM_IS_BITWISE_COPYABLE(T)))
             memcpy(m_p, other.m_p, other.m_size * sizeof(T));
          else
          {
@@ -332,7 +332,7 @@ namespace lzham
 
          const T* pSrc = m_p + start + n;
 
-         if (LZHAM_IS_BITWISE_COPYABLE(T))
+         if ((num_to_move) && (LZHAM_IS_BITWISE_COPYABLE(T)))
             memmove(pDst, pSrc, num_to_move * sizeof(T));
          else
          {
@@ -544,7 +544,7 @@ namespace lzham
 
       inline void set_all(const T& o)
       {
-         if ((sizeof(T) == 1) && (scalar_type<T>::cFlag))
+         if ((m_size) && (sizeof(T) == 1) && (scalar_type<T>::cFlag))
             memset(m_p, *reinterpret_cast<const uint8*>(&o), m_size);
          else
          {
