@@ -246,7 +246,12 @@ namespace lzham
          LZHAM_ASSERT(index <= m_size);
          if (!n)
             return true;
-                  
+
+         // m_size and m_capacity are 32-bit: "m_size + n" would wrap around and turn a >4 GB append into a
+         // small allocation followed by an out-of-bounds memcpy (upstream issue #19).
+         if (n > (0xFFFFFFFFU - m_size))
+            return false;
+
          const uint orig_size = m_size;
          if (!try_resize(m_size + n, true))
             return false;

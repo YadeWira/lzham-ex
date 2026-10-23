@@ -1121,6 +1121,14 @@ namespace lzham
       return m_status;
    }
 
+   // m_dict_size_log2 == 0 means "use the default dictionary size", like the other 0-valued parameters
+   // (upstream issue #14: 0 was rejected instead of selecting a sensible, portable default).
+   static void normalize_params(lzham_decompress_params &params)
+   {
+      if (!params.m_dict_size_log2)
+         params.m_dict_size_log2 = LZHAM_DEFAULT_DICT_SIZE_LOG2;
+   }
+
    static bool check_params(const lzham_decompress_params *pParams)
    {
       if ((!pParams) || (pParams->m_struct_size != sizeof(lzham_decompress_params)))
@@ -1144,14 +1152,20 @@ namespace lzham
       LZHAM_ASSUME(CLZDecompBase::cMinDictSizeLog2 == LZHAM_MIN_DICT_SIZE_LOG2);
       LZHAM_ASSUME(CLZDecompBase::cMaxDictSizeLog2 == LZHAM_MAX_DICT_SIZE_LOG2_X64);
 
-      if (!check_params(pParams))
+      if ((!pParams) || (pParams->m_struct_size != sizeof(lzham_decompress_params)))
          return NULL;
-      
+
+      lzham_decompress_params params(*pParams);
+      normalize_params(params);
+
+      if (!check_params(&params))
+         return NULL;
+
       lzham_decompressor *pState = lzham_new<lzham_decompressor>();
       if (!pState)
          return NULL;
 
-      pState->m_params = *pParams;
+      pState->m_params = params;
 
       if (pState->m_params.m_decompress_flags & LZHAM_DECOMP_FLAG_OUTPUT_UNBUFFERED)
       {
@@ -1184,9 +1198,15 @@ namespace lzham
       
       lzham_decompressor *pState = static_cast<lzham_decompressor *>(p);
 
-      if (!check_params(pParams))
+      if ((!pParams) || (pParams->m_struct_size != sizeof(lzham_decompress_params)))
          return NULL;
-      
+
+      lzham_decompress_params params(*pParams);
+      normalize_params(params);
+
+      if (!check_params(&params))
+         return NULL;
+
       if (pState->m_params.m_decompress_flags & LZHAM_DECOMP_FLAG_OUTPUT_UNBUFFERED)
       {
          lzham_free(pState->m_pRaw_decomp_buf);
@@ -1208,7 +1228,7 @@ namespace lzham
          }
       }
       
-      pState->m_params = *pParams;
+      pState->m_params = params;
 
       pState->init();
 

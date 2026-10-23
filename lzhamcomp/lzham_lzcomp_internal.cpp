@@ -64,6 +64,7 @@ namespace lzham
    lzcompressor::lzcompressor() :
       m_src_size(-1),
       m_src_adler32(0),
+      m_output_limit_hit(false),
       m_step(0),
       m_block_start_dict_ofs(0),
       m_block_index(0),
@@ -432,11 +433,24 @@ namespace lzham
          return false;
       if (!m_codec.stop_encoding(true))
          return false;
-      if (!m_comp_buf.append(m_codec.get_encoding_buf()))
+      if (!append_output())
          return false;
 
       m_block_index++;
       return true;
+   }
+
+   // Appends the encoder's buffer to the accumulated compressed stream, refusing to grow past the 4 GB limit of
+   // the 32-bit sized vector instead of corrupting memory (upstream issue #19).
+   bool lzcompressor::append_output()
+   {
+      const vector<uint8>& buf = m_codec.get_encoding_buf();
+      if (buf.size() > (0xFFFFFFFFU - m_comp_buf.size()))
+      {
+         m_output_limit_hit = true;
+         return false;
+      }
+      return m_comp_buf.append(buf);
    }
 
    bool lzcompressor::flush(lzham_flush_t flush_type)
@@ -577,7 +591,7 @@ namespace lzham
       }
       else
       {
-         if (!m_comp_buf.append(m_codec.get_encoding_buf()))
+         if (!append_output())
             return false;
       }
 
@@ -1948,7 +1962,7 @@ namespace lzham
          }
          else
          {
-            if (!m_comp_buf.append(m_codec.get_encoding_buf()))
+            if (!append_output())
                return false;
          }
       }

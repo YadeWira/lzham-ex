@@ -25,6 +25,12 @@ namespace lzham
       if ((grow_hint) && (!math::is_power_of_2(static_cast<uint64>(new_capacity))))
          new_capacity = static_cast<uint>(math::next_pow2(static_cast<uint64>(new_capacity)));
 
+      // m_capacity is 32-bit, so the rounded-up capacity must be clamped instead of truncated: next_pow2()
+      // turns a request just above 2 GB into 4 GB, which would wrap to zero and make the vector report room
+      // it does not have. Clamping keeps every capacity the caller actually asked for.
+      if (new_capacity > 0xFFFFFFFFULL)
+         new_capacity = 0xFFFFFFFFULL;
+
       LZHAM_ASSERT(new_capacity && (new_capacity > m_capacity));
 
       const size_t desired_size = element_size * new_capacity;

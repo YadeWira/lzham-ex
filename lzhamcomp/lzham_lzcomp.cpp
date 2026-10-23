@@ -33,10 +33,13 @@ namespace lzham
 
    static lzham_compress_status_t create_internal_init_params(lzcompressor::init_params &internal_params, const lzham_compress_params *pParams)
    {
-      if ((pParams->m_dict_size_log2 < CLZBase::cMinDictSizeLog2) || (pParams->m_dict_size_log2 > CLZBase::cMaxDictSizeLog2))
+      // m_dict_size_log2 == 0 selects the default (upstream issue #14).
+      const uint dict_size_log2 = pParams->m_dict_size_log2 ? pParams->m_dict_size_log2 : LZHAM_DEFAULT_DICT_SIZE_LOG2;
+
+      if ((dict_size_log2 < CLZBase::cMinDictSizeLog2) || (dict_size_log2 > CLZBase::cMaxDictSizeLog2))
          return LZHAM_COMP_STATUS_INVALID_PARAMETER;
-			     
-      internal_params.m_dict_size_log2 = pParams->m_dict_size_log2;
+
+      internal_params.m_dict_size_log2 = dict_size_log2;
 
       if (pParams->m_max_helper_threads < 0)
          internal_params.m_max_helper_threads = lzham_get_max_helper_threads();
@@ -48,7 +51,7 @@ namespace lzham
 
       if (pParams->m_num_seed_bytes)
       {
-         if ((!pParams->m_pSeed_bytes) || (pParams->m_num_seed_bytes > (1U << pParams->m_dict_size_log2)))
+         if ((!pParams->m_pSeed_bytes) || (pParams->m_num_seed_bytes > (1U << internal_params.m_dict_size_log2)))
             return LZHAM_COMP_STATUS_INVALID_PARAMETER;
 
          internal_params.m_num_seed_bytes = pParams->m_num_seed_bytes;
@@ -250,7 +253,7 @@ namespace lzham
          {
             *pIn_buf_size = 0;
             *pOut_buf_size = num_bytes_written_to_out_buf;
-            pState->m_status = LZHAM_COMP_STATUS_FAILED;
+            pState->m_status = pState->m_compressor.output_limit_hit() ? LZHAM_COMP_STATUS_FAILED_OUTPUT_LIMIT : LZHAM_COMP_STATUS_FAILED;
             return pState->m_status;
          }
       }
@@ -263,7 +266,7 @@ namespace lzham
             {
                *pIn_buf_size = 0;
                *pOut_buf_size = num_bytes_written_to_out_buf;
-               pState->m_status = LZHAM_COMP_STATUS_FAILED;
+               pState->m_status = pState->m_compressor.output_limit_hit() ? LZHAM_COMP_STATUS_FAILED_OUTPUT_LIMIT : LZHAM_COMP_STATUS_FAILED;
                return pState->m_status;
             }
          }
@@ -273,7 +276,7 @@ namespace lzham
             {
                *pIn_buf_size = 0;
                *pOut_buf_size = num_bytes_written_to_out_buf;
-               pState->m_status = LZHAM_COMP_STATUS_FAILED;
+               pState->m_status = pState->m_compressor.output_limit_hit() ? LZHAM_COMP_STATUS_FAILED_OUTPUT_LIMIT : LZHAM_COMP_STATUS_FAILED;
                return pState->m_status;
             }
             pState->m_finished_compression = true;
@@ -328,8 +331,11 @@ namespace lzham
       if (internal_params.m_max_helper_threads)
       {
          pTP = lzham_new<task_pool>();
-         if (!pTP->init(internal_params.m_max_helper_threads))
-            return LZHAM_COMP_STATUS_FAILED;
+         if ((!pTP) || (!pTP->init(internal_params.m_max_helper_threads)))
+         {
+            lzham_delete(pTP);
+            return LZHAM_COMP_STATUS_FAILED_ALLOC;
+         }
 
          internal_params.m_pTask_pool = pTP;
       }
@@ -338,7 +344,7 @@ namespace lzham
       if (!pCompressor)
       {
          lzham_delete(pTP);
-         return LZHAM_COMP_STATUS_FAILED;
+         return LZHAM_COMP_STATUS_FAILED_ALLOC;
       }
 
       if (!pCompressor->init(internal_params))
@@ -352,19 +358,21 @@ namespace lzham
       {
          if (!pCompressor->put_bytes(pSrc_buf, static_cast<uint32>(src_len)))
          {
+            const lzham_compress_status_t fail_status = pCompressor->output_limit_hit() ? LZHAM_COMP_STATUS_FAILED_OUTPUT_LIMIT : LZHAM_COMP_STATUS_FAILED;
             *pDst_len = 0;
             lzham_delete(pTP);
             lzham_delete(pCompressor);
-            return LZHAM_COMP_STATUS_FAILED;
+            return fail_status;
          }
       }
 
       if (!pCompressor->put_bytes(NULL, 0))
       {
+         const lzham_compress_status_t fail_status = pCompressor->output_limit_hit() ? LZHAM_COMP_STATUS_FAILED_OUTPUT_LIMIT : LZHAM_COMP_STATUS_FAILED;
          *pDst_len = 0;
          lzham_delete(pTP);
          lzham_delete(pCompressor);
-         return LZHAM_COMP_STATUS_FAILED;
+         return fail_status;
       }
 
       const byte_vec &comp_data = pCompressor->get_compressed_data();
@@ -410,6 +418,10 @@ namespace lzham
       if (level == LZHAM_Z_DEFAULT_COMPRESSION)
          level = 9;
 
+      // A negative window_bits means "raw stream, no zlib header/footer". Capture that before the Deflate
+      // alias below overwrites window_bits, otherwise the wrapper was written anyway (upstream issue #13).
+      const bool write_zlib_stream = (window_bits > 0);
+
       if (method == LZHAM_Z_DEFLATED)
       {
          // Force Deflate to LZHAM with default window_bits.
@@ -448,7 +460,7 @@ namespace lzham
 
       comp_params.m_dict_size_log2 = static_cast<lzham_uint32>(labs(window_bits));
 
-      if (window_bits > 0)
+      if (write_zlib_stream)
          comp_params.m_compress_flags |= LZHAM_COMP_FLAG_WRITE_ZLIB_STREAM;
 
       pStream->data_type = 0;
@@ -562,7 +574,12 @@ namespace lzham
    lzham_z_ulong lzham_lib_z_deflateBound(lzham_z_streamp pStream, lzham_z_ulong source_len)
    {
       LZHAM_NOTE_UNUSED(pStream);
-      return 64 + source_len + ((source_len + 4095) / 4096) * 4;
+
+      // Incompressible data is stored as raw blocks, and each block costs a few bytes of header. The smallest
+      // block size is 4 KB (dict_size_log2 15, the zlib API default), which measures ~0.122% overhead, so this
+      // allows ~0.78% plus a fixed slack. The previous formula (0.098% + 64 bytes) was smaller than the real
+      // worst case, and lzham_z_compress2() returned Z_BUF_ERROR for inputs above ~700 KB (upstream issue #22).
+      return source_len + (source_len / 128) + 4096;
    }
 
    int lzham_lib_z_compress2(unsigned char *pDest, lzham_z_ulong *pDest_len, const unsigned char *pSource, lzham_z_ulong source_len, int level)

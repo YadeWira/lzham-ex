@@ -91,7 +91,13 @@ namespace lzham
 
       uint32 get_src_adler32() const { return m_src_adler32; }
 
+      // True if compression stopped because the compressed stream would exceed the codec's 4 GB buffer limit,
+      // as opposed to running out of memory or a real failure.
+      bool output_limit_hit() const { return m_output_limit_hit; }
+
    private:
+      bool append_output();
+
       class state;
       
       enum
@@ -338,6 +344,8 @@ namespace lzham
 
       int64 m_src_size;
       uint32 m_src_adler32;
+
+      bool m_output_limit_hit;
 
       search_accelerator m_accel;
 

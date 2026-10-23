@@ -90,6 +90,11 @@ extern "C" {
    #define LZHAM_MAX_DICT_SIZE_LOG2_X86 26
    #define LZHAM_MAX_DICT_SIZE_LOG2_X64 29
 
+   // Used when lzham_compress_params/lzham_decompress_params::m_dict_size_log2 is 0: 64 MB, the largest
+   // dictionary that every supported build (including x86 and 32-bit ARM) can use, so a default stream can
+   // be decompressed everywhere.
+   #define LZHAM_DEFAULT_DICT_SIZE_LOG2 26
+
    #define LZHAM_MAX_HELPER_THREADS 64
 
    typedef enum
@@ -108,6 +113,12 @@ extern "C" {
       LZHAM_COMP_STATUS_FAILED_INITIALIZING,
       LZHAM_COMP_STATUS_INVALID_PARAMETER,
       LZHAM_COMP_STATUS_OUTPUT_BUF_TOO_SMALL,
+
+      // The compressed stream would exceed the 4 GB limit of the codec's internal (32-bit sized) buffers.
+      // Split the input or use the streaming API.
+      LZHAM_COMP_STATUS_FAILED_OUTPUT_LIMIT,
+      // A host memory allocation failed.
+      LZHAM_COMP_STATUS_FAILED_ALLOC,
 
       LZHAM_COMP_STATUS_FORCE_DWORD = 0xFFFFFFFF
    } lzham_compress_status_t;
@@ -156,7 +167,9 @@ extern "C" {
    typedef struct
    {
       lzham_uint32 m_struct_size;            // set to sizeof(lzham_compress_params)
-      lzham_uint32 m_dict_size_log2;         // set to the log2(dictionary_size), must range between [LZHAM_MIN_DICT_SIZE_LOG2, LZHAM_MAX_DICT_SIZE_LOG2_X86] for x86 LZHAM_MAX_DICT_SIZE_LOG2_X64 for x64
+      lzham_uint32 m_dict_size_log2;         // set to the log2(dictionary_size), or 0 for LZHAM_DEFAULT_DICT_SIZE_LOG2 (64 MB).
+                                             // Must range between [LZHAM_MIN_DICT_SIZE_LOG2, LZHAM_MAX_DICT_SIZE_LOG2_X86] on x86/x86-ARM
+                                             // and [LZHAM_MIN_DICT_SIZE_LOG2, LZHAM_MAX_DICT_SIZE_LOG2_X64] on x64/ARM64.
       lzham_compress_level m_level;          // set to LZHAM_COMP_LEVEL_FASTEST, etc.
 		lzham_uint32 m_table_update_rate;		// Controls tradeoff between ratio and decompression throughput. 0=default, or [1,LZHAM_MAX_TABLE_UPDATE_RATE], higher=faster but lower ratio.
       lzham_int32 m_max_helper_threads;      // max # of additional "helper" threads to create, must range between [-1,LZHAM_MAX_HELPER_THREADS], where -1=max practical
@@ -200,7 +213,12 @@ extern "C" {
    //    LZHAM_COMP_STATUS_NEEDS_MORE_INPUT - Compression can contintue, but the compressor has no more output, and has no input but we're not at EOF. Supply more input to continue.
    // Success/failure return status codes:
    //    LZHAM_COMP_STATUS_SUCCESS - Compression has completed successfully.
-   //    LZHAM_COMP_STATUS_FAILED, LZHAM_COMP_STATUS_FAILED_INITIALIZING, LZHAM_COMP_STATUS_INVALID_PARAMETER - Something went wrong.
+   //    LZHAM_COMP_STATUS_FAILED - Something went wrong while compressing.
+   //    LZHAM_COMP_STATUS_FAILED_INITIALIZING - The compressor could not be initialized.
+   //    LZHAM_COMP_STATUS_INVALID_PARAMETER - A parameter or the buffer combination is invalid.
+   //    LZHAM_COMP_STATUS_FAILED_ALLOC - A memory allocation failed.
+   //    LZHAM_COMP_STATUS_FAILED_OUTPUT_LIMIT - The compressed stream would exceed the codec's 4 GB internal buffer
+   //        limit (upstream issue #19). Split the input into smaller pieces or use the streaming API.
    LZHAM_DLL_EXPORT lzham_compress_status_t LZHAM_CDECL lzham_compress(
       lzham_compress_state_ptr pState,
       const lzham_uint8 *pIn_buf, size_t *pIn_buf_size,
@@ -214,7 +232,14 @@ extern "C" {
       lzham_flush_t flush_type);
 
    // Single function call compression interface.
-   // Same return codes as lzham_compress, except this function can also return LZHAM_COMP_STATUS_OUTPUT_BUF_TOO_SMALL.
+   // Same return codes as lzham_compress, except this function can also return LZHAM_COMP_STATUS_OUTPUT_BUF_TOO_SMALL
+   // and LZHAM_COMP_STATUS_FAILED_OUTPUT_LIMIT.
+   // Notes:
+   //    src_len must not exceed 0xFFFFFFFF, and the compressed result must fit in 4 GB. LZHAM keeps the whole
+   //    compressed stream in memory during this call, so incompressible inputs larger than ~4 GB cannot be
+   //    compressed in one call (the codec reports FAILED_OUTPUT_LIMIT instead of overrunning its buffers).
+   //    On success (and when the destination buffer is too small) *pDst_len is set to the number of bytes the
+   //    compressed stream occupies.
    LZHAM_DLL_EXPORT lzham_compress_status_t LZHAM_CDECL lzham_compress_memory(
       const lzham_compress_params *pParams,
       lzham_uint8* pDst_buf,
@@ -279,7 +304,9 @@ extern "C" {
    typedef struct
    {
       lzham_uint32 m_struct_size;            // set to sizeof(lzham_decompress_params)
-      lzham_uint32 m_dict_size_log2;         // set to the log2(dictionary_size), must range between [LZHAM_MIN_DICT_SIZE_LOG2, LZHAM_MAX_DICT_SIZE_LOG2_X86] for x86 LZHAM_MAX_DICT_SIZE_LOG2_X64 for x64
+      lzham_uint32 m_dict_size_log2;         // set to the log2(dictionary_size), or 0 for LZHAM_DEFAULT_DICT_SIZE_LOG2 (64 MB).
+                                             // Must range between [LZHAM_MIN_DICT_SIZE_LOG2, LZHAM_MAX_DICT_SIZE_LOG2_X86] on x86/x86-ARM
+                                             // and [LZHAM_MIN_DICT_SIZE_LOG2, LZHAM_MAX_DICT_SIZE_LOG2_X64] on x64/ARM64.
 		lzham_uint32 m_table_update_rate;		// Controls tradeoff between ratio and decompression throughput. 0=default, or [1,LZHAM_MAX_TABLE_UPDATE_RATE], higher=faster but lower ratio.
       lzham_uint32 m_decompress_flags;       // optional decompression flags (see lzham_decompress_flags enum)
       lzham_uint32 m_num_seed_bytes;         // for delta compression (optional) - number of seed bytes pointed to by m_pSeed_bytes

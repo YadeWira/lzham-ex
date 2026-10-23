@@ -5,10 +5,11 @@ All notable changes to this fork are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The public C ABI (`LZHAM_DLL_VERSION` = 0x1010) and the
 bitstream format are frozen and do not change between 1.x releases.
 
-## [1.0.0] - 2026-10-22
+## [1.0.1] - 2026-10-23
 
-First maintained release. Upstream (`richgel999/lzham_codec`) had no commits since January 2022 and never
-published a release.
+First maintained release. The version continues the upstream lineage instead of restarting at 1.0.0: the
+codec declares `LZHAM_DLL_VERSION` = 0x1010 (1.0.1), and upstream's frozen bitstream is "v1.0". Upstream
+(`richgel999/lzham_codec`) had no commits since January 2022 and never published a release.
 
 ### Added
 
@@ -59,3 +60,25 @@ published a release.
 - `lzham_yield_processor()` emitted `pause` on ARM; it now dispatches per architecture (`pause`, `yield`,
   or nothing).
 - Unbounded `sprintf` calls in `lzhamtest`'s temporary-file names (from upstream PR #35).
+
+### Fixed (upstream issue tracker)
+
+- **#19** (`lzham_compress_memory` crashed with buffers close to 4 GB): the codec's internal buffers use
+  32-bit element counters, so appending past 4 GB wrapped the size, shrank the allocation and then wrote
+  past its end. Growth is now checked and refused, and the API returns the new
+  `LZHAM_COMP_STATUS_FAILED_OUTPUT_LIMIT` (instead of corrupting memory or calling `exit()` through
+  `LZHAM_FAIL`). `LZHAM_COMP_STATUS_FAILED_ALLOC` was added for allocation failures, and the 4 GB per-call
+  limit is documented in `lzham.h`.
+- **#22** (`lzham_z_compress2` failed with `lzham_z_compressBound()` buffers): the bound assumed 0.098%
+  expansion, but incompressible data is stored as raw blocks and costs about 0.122% with the 4 KB blocks of
+  the zlib API, so compressing more than ~700 KB of incompressible data returned `Z_BUF_ERROR`.
+  `lzham_z_deflateBound()` now allows 0.78% plus a fixed slack.
+- **#13** (`lzham_z_deflateInit2` wrote a zlib header even for a negative `window_bits`): the "raw stream"
+  request was lost when the Deflate method alias overwrote `window_bits`. The flag is now captured before
+  the alias is applied, so raw streams are 2 bytes shorter and inflate correctly with `inflateInit2(-w)`.
+- **#14** (`m_dict_size_log2` = 0 was rejected): 0 now selects `LZHAM_DEFAULT_DICT_SIZE_LOG2` (26, 64 MB)
+  on both the compression and decompression side. That default is the largest one every supported build can
+  decode, so default streams stay portable between x86/ARMv7 and x64/ARM64. The header documents the
+  x86/ARMv7 limit for explicit values.
+- **#18** (undifferentiated failure codes): the two new status codes above are returned where the cause is
+  known, and every documented failure status is listed in `lzham.h`.
