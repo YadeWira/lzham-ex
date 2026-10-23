@@ -1191,8 +1191,8 @@ static bool test_recursive(ilzham &lzham_dll, const char *pPath, comp_options op
    sprintf(cmp_file, "e:\\__comp_temp_%u__.tmp", unique_id);
    sprintf(decomp_file, "e:\\__decomp_temp_%u__.tmp", unique_id);
 #else
-   sprintf(cmp_file, "__comp_temp_%u__.tmp", unique_id);
-   sprintf(decomp_file, "__decomp_temp_%u__.tmp", unique_id);
+   snprintf(cmp_file, sizeof(cmp_file), "__comp_temp_%u__.tmp", unique_id);
+   snprintf(decomp_file, sizeof(decomp_file), "__decomp_temp_%u__.tmp", unique_id);
 #endif
 
    for (uint file_index = first_file_index; file_index < files.size(); file_index++)
@@ -1590,7 +1590,7 @@ int main_internal(string_array cmd_line, int num_helper_threads, ilzham &lzham_d
 #ifdef _XBOX
             sprintf(decomp_file, "e:\\__decomp_temp_%u__.tmp", (uint)GetTickCount());
 #else
-            sprintf(decomp_file, "__decomp_temp_%u__.tmp", (uint)timer::get_ms());
+            snprintf(decomp_file, sizeof(decomp_file), "__decomp_temp_%u__.tmp", (uint)timer::get_ms());
 #endif
             if (!decompress_file(lzham_dll, cmp_file.c_str(), decomp_file, options, seed_filename.length() ? seed_filename.c_str() : NULL))
             {
