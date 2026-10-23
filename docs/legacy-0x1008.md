@@ -40,6 +40,13 @@ immediately. There are four of them:
 4. **Polar codes.** `0x1008` can compute the code sizes with "polar codes" (`lzham_polar_codes.cpp`) instead
    of the Moffat/Huffman construction, selected by the second configuration bit. v1.0 has no polar codes.
 
+## What the format change costs
+
+The 0x1008 alpha selects literals and `is_match` flags with 64 previous-byte contexts; v1.0 uses a single
+literal table and 12 state-based contexts, which is cheaper to decode. zpaq-std measured the size difference
+on its corpus (100 files, up to 12 MB, levels 1-4): v1.0 output is 0.07% smaller than the alpha at level 1
+and 0.59% larger at level 4.
+
 ## A decoder-only legacy mode
 
 Feasible, with two constraints:

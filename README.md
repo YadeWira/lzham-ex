@@ -232,7 +232,8 @@ package (<code>find_package(lzham)</code>, targets <code>lzham::lzham</code> and
 a pkg-config file (<code>lzham.pc</code>).
 
 IMPORTANT: With clang or gcc compile LZHAM with "No strict aliasing" ENABLED: -fno-strict-aliasing
-(the CMake build does this for you).
+(the CMake build does this for you). This applies to vendors that compile the sources in-tree as well, for
+example zpaq-std's LZHAM 1.0 block decoder.
 
 I DO NOT test or develop the codec with strict aliasing:
 * https://lkml.org/lkml/2003/2/26/158
