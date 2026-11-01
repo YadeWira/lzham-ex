@@ -299,6 +299,11 @@ static int zlib_small_buffers(size_t src_len, int window_bits)
          }
       }
    }
+   if ((zs.total_in != src_len) || (zs.total_out != cmp_len))
+   {
+      printf("FAIL: zlib deflate totals (%lu/%lu)\n", (unsigned long)zs.total_in, (unsigned long)zs.total_out);
+      result = 1;
+   }
    lzham_z_deflateEnd(&zs);
 
    memset(&zd, 0, sizeof(zd));
@@ -359,6 +364,44 @@ int main(void)
    static const size_t chunks[] = { 1, 7, 4096 };
    int failures = 0;
    size_t s, c;
+
+   /* deflateReset()/inflateReset() must leave the counters as the matching init call does. */
+   {
+      lzham_z_stream zs, zd;
+      unsigned char a[1024], b[2048];
+      size_t alen = 0;
+      memset(&zs, 0, sizeof(zs));
+      if ((lzham_z_deflateInit2(&zs, 6, LZHAM_Z_LZHAM, LZHAM_Z_DEFAULT_WINDOW_BITS, 9, LZHAM_Z_DEFAULT_STRATEGY) != LZHAM_Z_OK) ||
+          (lzham_z_deflateReset(&zs) != LZHAM_Z_OK) ||
+          (zs.total_in != 0) || (zs.total_out != 0))
+      {
+         printf("FAIL: deflateReset did not reset the counters\n");
+         failures++;
+      }
+      zs.next_in = a;
+      zs.avail_in = (unsigned)sizeof(a);
+      zs.next_out = b;
+      zs.avail_out = (unsigned)sizeof(b);
+      if (lzham_z_deflate(&zs, LZHAM_Z_FINISH) != LZHAM_Z_STREAM_END)
+      {
+         printf("FAIL: zlib compress after deflateReset\n");
+         failures++;
+      }
+      else
+         alen = sizeof(b) - zs.avail_out;
+      lzham_z_deflateEnd(&zs);
+
+      memset(&zd, 0, sizeof(zd));
+      if ((lzham_z_inflateInit2(&zd, LZHAM_Z_DEFAULT_WINDOW_BITS) != LZHAM_Z_OK) ||
+          (lzham_z_inflateReset(&zd) != LZHAM_Z_OK) ||
+          (zd.total_in != 0) || (zd.total_out != 0))
+      {
+         printf("FAIL: inflateReset did not reset the counters\n");
+         failures++;
+      }
+      lzham_z_inflateEnd(&zd);
+      (void)alen;
+   }
 
    for (s = 0; s < sizeof(sizes) / sizeof(sizes[0]); s++)
    {

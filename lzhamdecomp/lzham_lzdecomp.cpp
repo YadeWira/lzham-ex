@@ -1392,6 +1392,13 @@ namespace lzham
       if (!lzham_lib_decompress_reinit(pState, &params))
          return LZHAM_Z_STREAM_ERROR;
 
+      // inflateReset() is documented to leave the stream as inflateInit() does, so the counters restart too.
+      pStream->total_in = 0;
+      pStream->total_out = 0;
+      pStream->adler = 0;
+      pStream->msg = NULL;
+      pStream->data_type = 0;
+
       return LZHAM_Z_OK;
    }
 

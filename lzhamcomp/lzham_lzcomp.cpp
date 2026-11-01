@@ -510,6 +510,13 @@ namespace lzham
 
       pStream->state = (struct lzham_z_internal_state *)pComp;
 
+      // deflateReset() is documented to leave the stream as deflateInit() does, so the counters restart too.
+      pStream->total_in = 0;
+      pStream->total_out = 0;
+      pStream->adler = LZHAM_Z_ADLER32_INIT;
+      pStream->msg = NULL;
+      pStream->data_type = 0;
+
       return LZHAM_Z_OK;
    }
 
