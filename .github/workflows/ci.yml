@@ -214,5 +214,10 @@ jobs:
                 *) echo "   unexpected import: $dll"; exit 1 ;;
               esac
             done
+            # libgcc's gthr-win32.o imports GetThreadId (Vista+); the XP build satisfies it locally with
+            # lzhamdecomp/lzham_winxp_compat.c instead of importing it.
+            if i686-w64-mingw32-objdump -p "$f" | grep -q "GetThreadId"; then
+              echo "   imports GetThreadId, which Windows XP does not have"; exit 1
+            fi
           done
           echo "All binaries are XP-loadable."

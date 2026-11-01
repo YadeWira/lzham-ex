@@ -100,6 +100,21 @@ function(lzham_static_runtime_if_mingw target)
     endif()
 endfunction()
 
+# Windows XP has no GetThreadId, but libgcc's gthr-win32.o imports it (it is linked for any C++ object with
+# static constructors) and XP then refuses to load the binary with STATUS_ENTRYPOINT_NOT_FOUND. The shim
+# defines the import pointer locally. It has to be an object on the link line, not an archive member, or the
+# linker resolves the symbol against kernel32 first.
+if(LZHAM_TARGET_WINDOWS_XP)
+    add_library(lzham_xp_compat OBJECT lzhamdecomp/lzham_winxp_compat.c)
+    set_target_properties(lzham_xp_compat PROPERTIES POSITION_INDEPENDENT_CODE ON)
+endif()
+
+function(lzham_add_xp_compat target)
+    if(LZHAM_TARGET_WINDOWS_XP)
+        target_sources(${target} PRIVATE $<TARGET_OBJECTS:lzham_xp_compat>)
+    endif()
+endfunction()
+
 # Shared per-target settings. -fno-strict-aliasing is mandatory: the codec type-puns in several places.
 function(lzham_configure_target target)
     set_target_properties(${target} PROPERTIES
@@ -173,6 +188,7 @@ if(LZHAM_BUILD_SHARED)
             ${CMAKE_CURRENT_SOURCE_DIR}/lzhamdecomp
             ${CMAKE_CURRENT_SOURCE_DIR}/lzhamcomp)
     target_link_libraries(lzhamdll PRIVATE lzhamcomp)
+    lzham_add_xp_compat(lzhamdll)
     set_target_properties(lzhamdll PROPERTIES
         OUTPUT_NAME lzhamdll
         VERSION ${PROJECT_VERSION}
@@ -223,6 +239,7 @@ if(LZHAM_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/lzhamtest
         ${CMAKE_CURRENT_SOURCE_DIR}/lzhamdecomp
         ${CMAKE_CURRENT_SOURCE_DIR}/lzhamcomp)
+    lzham_add_xp_compat(lzhamtest)
     if(NOT MSVC)
         target_compile_options(lzhamtest PRIVATE -Wall -Wextra)
     endif()
@@ -249,6 +266,7 @@ if(LZHAM_BUILD_TESTS)
 
     # Public C API smoke test: compress/decompress every mode and level, verify payload and Adler-32.
     add_executable(lzham_roundtrip_test tests/test_roundtrip.c)
+    lzham_add_xp_compat(lzham_roundtrip_test)
     target_include_directories(lzham_roundtrip_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
     if(MSVC)
         target_compile_options(lzham_roundtrip_test PRIVATE /W3)
@@ -284,6 +302,7 @@ if(LZHAM_BUILD_TESTS)
     endif()
 
     add_executable(lzham_output_limit_test tests/test_output_limit.c)
+    lzham_add_xp_compat(lzham_output_limit_test)
     target_include_directories(lzham_output_limit_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
     if(MSVC)
         target_compile_options(lzham_output_limit_test PRIVATE /W3)
@@ -299,6 +318,7 @@ if(LZHAM_BUILD_TESTS)
 
     # Raw-stream compressor used to check the reference decoder in tools/lzham_ref.py.
     add_executable(lzham_compress tools/lzham_compress.c)
+    lzham_add_xp_compat(lzham_compress)
     target_include_directories(lzham_compress PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
     if(MSVC)
         target_compile_options(lzham_compress PRIVATE /W3)

@@ -12,8 +12,10 @@ bitstream format are frozen and do not change between 1.x releases.
 - **Windows XP SP3 (x86) support** through the `LZHAM_TARGET_WINDOWS_XP` CMake option (or by compiling with
   `_WIN32_WINNT=0x0501`). 64-bit targets are rejected by the option. The codec only uses APIs that XP ships
   (SLIST, `_beginthreadex`, `QueryPerformanceCounter`, `OutputDebugStringA`, ...), and the MinGW-w64 build
-  depends only on KERNEL32 and msvcrt, so the resulting DLL and tools load on XP. CI cross-builds and checks
-  the subsystem version and imports; the runtime test runs on a Windows XP VM.
+  depends only on KERNEL32 and msvcrt, so the resulting DLL and tools load on XP. `lzhamdecomp/lzham_winxp_compat.c`
+  provides the `GetThreadId` import that libgcc's `gthr-win32.o` pulls in (Vista+) so XP does not reject the
+  binaries with `STATUS_ENTRYPOINT_NOT_FOUND`. CI cross-builds checks the subsystem version and the imports; the
+  runtime test runs on a Windows XP SP3 VM (roundtrip plus streams exchanged with Linux in both directions).
 
 ### Changed
 

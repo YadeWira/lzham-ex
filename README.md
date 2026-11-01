@@ -246,7 +246,10 @@ Other configurations:
   <code>-DCMAKE_SYSTEM_NAME=Windows -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc
   -DCMAKE_CXX_COMPILER=i686-w64-mingw32-g++ -DLZHAM_TARGET_WINDOWS_XP=ON</code>. That lowers
   <code>_WIN32_WINNT</code> to 0x0501 and rejects 64-bit builds; the binaries then depend only on KERNEL32 and
-  msvcrt, which XP ships.
+  msvcrt, which XP ships. In-tree builds that target XP must also compile
+  <code>lzhamdecomp/lzham_winxp_compat.c</code>: MinGW's libgcc imports <code>GetThreadId</code> (Vista+)
+  through <code>gthr-win32.o</code>, which any C++ object with static constructors pulls in, and XP refuses to
+  load the binary with <code>STATUS_ENTRYPOINT_NOT_FOUND</code> (0xC0000139) otherwise.
 
 Installing: <code>cmake --install build --prefix /usr/local</code> installs the headers, the libraries and a CMake
 package (<code>find_package(lzham)</code>, targets <code>lzham::lzham</code> and <code>lzham::lzham_static</code>) plus
