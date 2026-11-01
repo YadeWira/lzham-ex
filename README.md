@@ -111,10 +111,11 @@ to the ANSI path (no multithreaded compression, no atomic operations), and an In
 or GCC built-ins. The plain ANSI C/C++ fallback (no threads, no atomics) still exists for new ports;
 see "ANSI C/C++" below.</p>
 
-<p>Downstream: <a href="https://github.com/YadeWira/zpaq-std">zpaq-std</a> 1.6.0 vendors these sources
-unchanged for its <code>-ma:lzh</code> blocks (LZHAM 1.0, decoded by its own ZPAQL implementation of the
-format); the pre-1.0 alpha archives it wrote before stay readable through the decoder those versions already
-shipped. See the wiki's <a href="https://github.com/YadeWira/lzham-ex/wiki/Downstream">Downstream</a> page.</p>
+<p>Downstream: <a href="https://github.com/YadeWira/zpaq-std">zpaq-std</a> vendors these sources unchanged for
+its <code>-ma:lzh</code> blocks (LZHAM 1.0, decoded by its own ZPAQL implementation of the format); the pre-1.0
+alpha archives it wrote before stay readable through the decoder those versions already shipped. zpaq-std
+2.1.1 ships lzham-ex 1.1.0 and produces archives byte-identical to the previous release. See the wiki's
+<a href="https://github.com/YadeWira/lzham-ex/wiki/Downstream">Downstream</a> page.</p>
 
 <p>The bitstream format and the public C ABI (<code>lzham_get_version()</code> returns
 <code>LZHAM_DLL_VERSION</code> = 0x1010) are frozen. Builds for every supported architecture read and write
