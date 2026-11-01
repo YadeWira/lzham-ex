@@ -284,6 +284,23 @@ if(LZHAM_BUILD_TESTS)
 
     add_test(NAME lzham_roundtrip COMMAND lzham_roundtrip_test)
 
+    add_executable(lzham_streaming_test tests/test_streaming.c)
+    lzham_add_xp_compat(lzham_streaming_test)
+    target_include_directories(lzham_streaming_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    if(MSVC)
+        target_compile_options(lzham_streaming_test PRIVATE /W3)
+    else()
+        target_compile_options(lzham_streaming_test PRIVATE -Wall -Wextra)
+    endif()
+    set_target_properties(lzham_streaming_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
+    if(LZHAM_BUILD_SHARED)
+        target_link_libraries(lzham_streaming_test PRIVATE lzhamdll)
+    else()
+        target_link_libraries(lzham_streaming_test PRIVATE lzhamlib)
+    endif()
+    add_test(NAME lzham_streaming COMMAND lzham_streaming_test)
+
     # A second copy of the library with the element limit lowered to 8 MB, so the 4 GB compressed-stream limit
     # (upstream issue #19) can be tested in seconds instead of allocating gigabytes.
     add_library(lzham_limits STATIC

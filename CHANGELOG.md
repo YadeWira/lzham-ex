@@ -9,6 +9,27 @@ bitstream format are frozen and do not change between 1.x releases.
 
 ### Added
 
+- `tests/test_streaming.c`: drives the streaming and zlib-style state machines with 1-byte and irregular
+  buffers, covers `lzham_decompress_reinit()` switching to a larger dictionary, and runs in CTest as
+  `lzham_streaming`.
+
+### Fixed
+
+- **Heap overflow in `lzham_decompress_reinit()`**: the ring buffer was sized from the *previous*
+  parameters, so reinitialising a buffered decompressor with a larger `m_dict_size_log2` left the buffer too
+  small and the decoder wrote past it (reproduced with AddressSanitizer). It now sizes from the parameters
+  being installed and also honours the new buffered/unbuffered flag.
+
+### Changed
+
+- **`lzham_compress_memory()` no longer starts more helper threads than there are blocks.** The parameters'
+  automatic thread count (`m_max_helper_threads = -1`) resolves to one thread per CPU, which for a small
+  input means creating dozens of threads that have nothing to do. Measured with `m_max_helper_threads = -1`
+  (best of 30 runs, same machine): 4 KB 3.90 ms -> 0.93 ms, 16 KB 4.52 -> 1.90, 64 KB 12.14 -> 6.20,
+  256 KB 26.60 -> 16.66, 1 MB 140 -> 76 ms, and the compressed size of those inputs dropped by 0-10% because
+  the parallel parser no longer splits a single block's parse. Inputs with 64 or more blocks keep exactly the
+  previous behaviour.
+
 - **Windows XP SP3 (x86) support** through the `LZHAM_TARGET_WINDOWS_XP` CMake option (or by compiling with
   `_WIN32_WINNT=0x0501`). 64-bit targets are rejected by the option. The codec only uses APIs that XP ships
   (SLIST, `_beginthreadex`, `QueryPerformanceCounter`, `OutputDebugStringA`, ...), and the MinGW-w64 build
