@@ -5,7 +5,7 @@ All notable changes to this fork are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The public C ABI (`LZHAM_DLL_VERSION` = 0x1010) and the
 bitstream format are frozen and do not change between 1.x releases.
 
-## [Unreleased]
+## [1.1.0] - 2026-11-01
 
 ### Added
 
