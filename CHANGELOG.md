@@ -9,6 +9,14 @@ bitstream format are frozen and do not change between 1.x releases.
 
 ### Added
 
+- **Windows XP SP3 (x86) support** through the `LZHAM_TARGET_WINDOWS_XP` CMake option (or by compiling with
+  `_WIN32_WINNT=0x0501`). 64-bit targets are rejected by the option. The codec only uses APIs that XP ships
+  (SLIST, `_beginthreadex`, `QueryPerformanceCounter`, `OutputDebugStringA`, ...), and the MinGW-w64 build
+  depends only on KERNEL32 and msvcrt, so the resulting DLL and tools load on XP.
+  `lzhamdecomp/lzham_winxp_compat.c` provides the `GetThreadId` import that libgcc's `gthr-win32.o` pulls in
+  (Vista+) so XP does not reject the binaries with `STATUS_ENTRYPOINT_NOT_FOUND`. CI cross-builds the
+  configuration and checks the subsystem version and the imports; the runtime test runs on a Windows XP SP3
+  VM (roundtrip plus streams exchanged with Linux in both directions).
 - `tests/test_streaming.c`: drives the streaming and zlib-style state machines with 1-byte and irregular
   buffers, covers `lzham_decompress_reinit()` switching to a larger dictionary, and runs in CTest as
   `lzham_streaming`.
@@ -19,6 +27,8 @@ bitstream format are frozen and do not change between 1.x releases.
   parameters, so reinitialising a buffered decompressor with a larger `m_dict_size_log2` left the buffer too
   small and the decoder wrote past it (reproduced with AddressSanitizer). It now sizes from the parameters
   being installed and also honours the new buffered/unbuffered flag.
+- **`deflateReset()` / `inflateReset()`** now reset `total_in`, `total_out`, `adler` and `msg`, as zlib
+  documents for a stream that is reinitialised.
 
 ### Changed
 
@@ -29,23 +39,17 @@ bitstream format are frozen and do not change between 1.x releases.
   256 KB 26.60 -> 16.66, 1 MB 140 -> 76 ms, and the compressed size of those inputs dropped by 0-10% because
   the parallel parser no longer splits a single block's parse. Inputs with 64 or more blocks keep exactly the
   previous behaviour.
-
-- **Windows XP SP3 (x86) support** through the `LZHAM_TARGET_WINDOWS_XP` CMake option (or by compiling with
-  `_WIN32_WINNT=0x0501`). 64-bit targets are rejected by the option. The codec only uses APIs that XP ships
-  (SLIST, `_beginthreadex`, `QueryPerformanceCounter`, `OutputDebugStringA`, ...), and the MinGW-w64 build
-  depends only on KERNEL32 and msvcrt, so the resulting DLL and tools load on XP. `lzhamdecomp/lzham_winxp_compat.c`
-  provides the `GetThreadId` import that libgcc's `gthr-win32.o` pulls in (Vista+) so XP does not reject the
-  binaries with `STATUS_ENTRYPOINT_NOT_FOUND`. CI cross-builds checks the subsystem version and the imports; the
-  runtime test runs on a Windows XP SP3 VM (roundtrip plus streams exchanged with Linux in both directions).
-
-### Changed
-
 - **Linux ARMv7 is no longer supported.** A 32-bit ARM build still compiles, but it now falls back to the
   ANSI path (no multithreaded compression, no atomic operations) instead of the first-class ARM path it had
   in 1.0.x.
 - **macOS x86_64 (and therefore universal binaries) are no longer supported.** macOS support is arm64 only,
   tested in CI.
-- The README now opens with a Component/Status table (CI, latest release, ABI, libraries, tools, tests).
+- The README opens with a Component/Status table (CI, latest release, ABI, libraries, tools, tests).
+
+### Verified
+
+- With `m_max_helper_threads = 0` the compressed output is byte-identical to 1.0.2 (four files x dict
+  15/20/26 x levels 1-4).
 
 ## [1.0.2] - 2026-10-23
 
