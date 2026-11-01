@@ -21,6 +21,20 @@ option(LZHAM_BUILD_STATIC "Build the static library (lzhamlib_x86.lib / liblzham
 option(LZHAM_BUILD_TESTS "Build lzhamtest and the CTest smoke tests" ON)
 option(LZHAM_ENABLE_MULTITHREADING "Enable multithreaded compression (Win32 threads or pthreads)" ON)
 option(LZHAM_INSTALL "Generate install rules" ON)
+option(LZHAM_TARGET_WINDOWS_XP "Target Windows XP (32-bit only, _WIN32_WINNT=0x0501)" OFF)
+
+if(LZHAM_TARGET_WINDOWS_XP)
+    if(NOT WIN32)
+        message(FATAL_ERROR "LZHAM_TARGET_WINDOWS_XP requires a Windows target.")
+    endif()
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        message(FATAL_ERROR "Windows XP support is 32-bit only: use a 32-bit toolchain (for MinGW, an i686 one).")
+    endif()
+    # LZHAM only uses APIs that exist since Windows XP (IsDebuggerPresent, OutputDebugStringA, DebugBreak,
+    # the Interlocked family, _beginthreadex, QueryPerformanceCounter, and the SLIST functions), so lowering
+    # the target is enough.
+    add_compile_definitions(_WIN32_WINNT=0x0501 WINVER=0x0501)
+endif()
 
 if(NOT LZHAM_BUILD_SHARED AND NOT LZHAM_BUILD_STATIC)
     message(FATAL_ERROR "Enable at least one of LZHAM_BUILD_SHARED or LZHAM_BUILD_STATIC.")
@@ -78,6 +92,14 @@ if(LZHAM_ENABLE_MULTITHREADING)
     endif()
 endif()
 
+# MinGW links the shared libgcc/libstdc++ by default; make the DLL and the tools self-contained so they only
+# depend on KERNEL32 and msvcrt (which is also what makes them loadable on Windows XP).
+function(lzham_static_runtime_if_mingw target)
+    if(MINGW)
+        target_link_options(${target} PRIVATE -static-libgcc -static-libstdc++)
+    endif()
+endfunction()
+
 # Shared per-target settings. -fno-strict-aliasing is mandatory: the codec type-puns in several places.
 function(lzham_configure_target target)
     set_target_properties(${target} PROPERTIES
@@ -96,10 +118,7 @@ function(lzham_configure_target target)
         target_compile_definitions(${target} PRIVATE _LARGEFILE64_SOURCE=1 _FILE_OFFSET_BITS=64)
     endif()
 
-    if(MINGW)
-        # Ship self-contained DLLs/executables (no libgcc_s_*.dll / libstdc++-6.dll next to them).
-        target_link_options(${target} PRIVATE -static-libgcc -static-libstdc++)
-    endif()
+    lzham_static_runtime_if_mingw(${target})
 
     if(NOT LZHAM_ENABLE_MULTITHREADING)
         target_compile_definitions(${target} PRIVATE LZHAM_ANSI_CPLUSPLUS=1)
@@ -207,9 +226,7 @@ if(LZHAM_BUILD_TESTS)
     if(NOT MSVC)
         target_compile_options(lzhamtest PRIVATE -Wall -Wextra)
     endif()
-    if(MINGW)
-        target_link_options(lzhamtest PRIVATE -static-libgcc -static-libstdc++)
-    endif()
+    lzham_static_runtime_if_mingw(lzhamtest)
     set_target_properties(lzhamtest PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
 
@@ -238,9 +255,7 @@ if(LZHAM_BUILD_TESTS)
     else()
         target_compile_options(lzham_roundtrip_test PRIVATE -Wall -Wextra)
     endif()
-    if(MINGW)
-        target_link_options(lzham_roundtrip_test PRIVATE -static-libgcc -static-libstdc++)
-    endif()
+    lzham_static_runtime_if_mingw(lzham_roundtrip_test)
     set_target_properties(lzham_roundtrip_test PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
     if(LZHAM_BUILD_SHARED)
@@ -275,9 +290,7 @@ if(LZHAM_BUILD_TESTS)
     else()
         target_compile_options(lzham_output_limit_test PRIVATE -Wall -Wextra)
     endif()
-    if(MINGW)
-        target_link_options(lzham_output_limit_test PRIVATE -static-libgcc -static-libstdc++)
-    endif()
+    lzham_static_runtime_if_mingw(lzham_output_limit_test)
     target_link_libraries(lzham_output_limit_test PRIVATE lzham_limits)
     set_target_properties(lzham_output_limit_test PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
@@ -292,6 +305,7 @@ if(LZHAM_BUILD_TESTS)
     else()
         target_compile_options(lzham_compress PRIVATE -Wall -Wextra)
     endif()
+    lzham_static_runtime_if_mingw(lzham_compress)
     set_target_properties(lzham_compress PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
     if(LZHAM_BUILD_STATIC)

@@ -5,6 +5,25 @@ All notable changes to this fork are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The public C ABI (`LZHAM_DLL_VERSION` = 0x1010) and the
 bitstream format are frozen and do not change between 1.x releases.
 
+## [Unreleased]
+
+### Added
+
+- **Windows XP SP3 (x86) support** through the `LZHAM_TARGET_WINDOWS_XP` CMake option (or by compiling with
+  `_WIN32_WINNT=0x0501`). 64-bit targets are rejected by the option. The codec only uses APIs that XP ships
+  (SLIST, `_beginthreadex`, `QueryPerformanceCounter`, `OutputDebugStringA`, ...), and the MinGW-w64 build
+  depends only on KERNEL32 and msvcrt, so the resulting DLL and tools load on XP. CI cross-builds and checks
+  the subsystem version and imports; the runtime test runs on a Windows XP VM.
+
+### Changed
+
+- **Linux ARMv7 is no longer supported.** A 32-bit ARM build still compiles, but it now falls back to the
+  ANSI path (no multithreaded compression, no atomic operations) instead of the first-class ARM path it had
+  in 1.0.x.
+- **macOS x86_64 (and therefore universal binaries) are no longer supported.** macOS support is arm64 only,
+  tested in CI.
+- The README now opens with a Component/Status table (CI, latest release, ABI, libraries, tools, tests).
+
 ## [1.0.2] - 2026-10-23
 
 ### Added

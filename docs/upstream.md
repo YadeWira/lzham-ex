@@ -23,7 +23,7 @@ have to be rediscovered later. Upstream PR/issue numbers are from `richgel999/lz
 | Issue #19 | Crash (or `exit()`) with incompressible buffers close to 4 GB | Internal vectors use 32-bit element counters; a >4 GB append wrapped the size and wrote past the allocation. Growth is now checked, and the API returns `LZHAM_COMP_STATUS_FAILED_OUTPUT_LIMIT`. `tests/test_output_limit.c` links a copy of the library with the limit lowered to 8 MB, so the failure path is covered in about a second. |
 | Issue #22 | `lzham_z_compress2` returning `Z_BUF_ERROR` with `lzham_z_compressBound()` buffers | The bound was 0.098% but the real worst case with the zlib API's 4 KB blocks is 0.122%. `lzham_z_deflateBound()` now allows 0.78% + 4096 bytes. Reproduced and re-tested with incompressible data from 4 KB to 32 MB. |
 | Issue #13 | `deflateInit2` writing a zlib header for a negative `window_bits` | The raw-stream flag was captured after the Deflate alias overwrote `window_bits`. It is now captured first; raw streams are 2 bytes shorter and inflate with `inflateInit2(-w)`. |
-| Issue #14 | Dictionary size 0 rejected, and a confusing x86/x64 default | 0 now means `LZHAM_DEFAULT_DICT_SIZE_LOG2` (26, decodeable on every supported target) on both sides, and the header documents the x86/ARMv7 limit for explicit values. |
+| Issue #14 | Dictionary size 0 rejected, and a confusing x86/x64 default | 0 now means `LZHAM_DEFAULT_DICT_SIZE_LOG2` (26, decodeable on every supported target) on both sides, and the header documents the 32-bit limit for explicit values. |
 | Issue #18 | Undifferentiated `FAILED` codes | New ABI-safe statuses `LZHAM_COMP_STATUS_FAILED_ALLOC` and `LZHAM_COMP_STATUS_FAILED_OUTPUT_LIMIT`, returned where the cause is known, and the failure list is documented in `lzham.h`. |
 
 ## Rejected (with reasons)
@@ -43,9 +43,9 @@ have to be rediscovered later. Upstream PR/issue numbers are from `richgel999/lz
 
 ## Platform work that upstream never had
 
-* ARMv7 and AArch64 as first-class targets: pthreads, GCC atomics, real memory barriers, per-architecture
-  spin back-off. Upstream only had an ANSI fallback for ARM, which silently disabled multithreaded
-  compression.
+* AArch64 as a first-class target: pthreads, GCC atomics, real memory barriers, per-architecture spin
+  back-off. Upstream only had an ANSI fallback for ARM, which silently disabled multithreaded compression.
+  (ARMv7 was added in 1.0.x and dropped again: 32-bit ARM now falls back to the ANSI build.)
 * Unaligned access made explicit: the matcher compared matches through a `uint64*` cast, which makes GCC
   emit `LDRD` on 32-bit ARM and faults with `SIGBUS`. All unaligned reads now go through
   `lzham::load_unaligned_uint32()`/`load_unaligned_uint64()` (memcpy-based, folded into a single load).

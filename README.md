@@ -1,12 +1,19 @@
 LZHAM - Lossless Data Compression Codec
 =============
 
-[![CI](https://github.com/YadeWira/lzham-ex/actions/workflows/ci.yml/badge.svg)](https://github.com/YadeWira/lzham-ex/actions/workflows/ci.yml)
+| Component | Status |
+|---|---|
+| CI | [![CI][ciBadge]][ciLink] |
+| Latest release | [![Release][relBadge]][relLink] |
+| Public API and bitstream | Frozen (`LZHAM_DLL_VERSION` = 0x1010) |
+| Libraries | Shared and static, with install rules, a CMake package and pkg-config |
+| Tools | `lzhamtest`, raw-stream compressor, Python reference decoder |
+| Tests | CTest: API roundtrip, compressed-stream limit, reference decoder |
 
 Public Domain (see LICENSE)
 
-<p>LZHAM is a lossless data compression codec written in C/C++ (specifically C++03), with a compression ratio similar to LZMA but with 1.5x-8x faster decompression speed. It officially supports Linux x86/x64/ARMv7/ARM64, Windows x86/x64 (Windows 7 or newer) and
-macOS x86_64/arm64. See "Platforms/Compiler Support" below.</p>
+<p>LZHAM is a lossless data compression codec written in C/C++ (specifically C++03), with a compression ratio similar to LZMA but with 1.5x-8x faster decompression speed. It officially supports Linux x86/x64/ARM64, Windows x86/x64 (Windows 7 or newer, plus 32-bit
+Windows XP) and macOS arm64. See "Platforms/Compiler Support" below.</p>
 
 An improved version of LZHAM, with better compression, is [here](https://github.com/richgel999/lzham_codec_devel).
 
@@ -91,10 +98,14 @@ written with v1.0. The only thing that could change this are critical bugfixes.<
 
 <table>
 <tr><th>OS</th><th>Architectures</th><th>Compilers</th><th>Status</th></tr>
-<tr><td>Linux</td><td>x86, x64, ARMv7, ARM64</td><td>GCC, Clang</td><td>Tested natively and under QEMU</td></tr>
+<tr><td>Linux</td><td>x86, x64, ARM64</td><td>GCC, Clang</td><td>Tested natively and under QEMU</td></tr>
 <tr><td>Windows</td><td>x86, x64 (Windows 7 or newer)</td><td>MSVC 2019/2022, MinGW-w64</td><td>Tested on Windows 7 SP1 and Windows 10</td></tr>
-<tr><td>macOS</td><td>x86_64, arm64 (universal binaries supported)</td><td>Apple Clang</td><td>Built and tested in CI</td></tr>
+<tr><td>Windows XP SP3</td><td>x86</td><td>MinGW-w64 (32-bit)</td><td>Built with <code>LZHAM_TARGET_WINDOWS_XP</code> and tested on Windows XP</td></tr>
+<tr><td>macOS</td><td>arm64</td><td>Apple Clang</td><td>Built and tested in CI</td></tr>
 </table>
+
+<p>32-bit ARM (ARMv7) and Intel macOS are not supported. An ARMv7 Linux build still compiles, but it falls back
+to the ANSI path (no multithreaded compression, no atomic operations), and an Intel macOS build is not tested.</p>
 
 <p>Multithreaded compression uses Win32 threads or POSIX threads; atomic operations use MSVC intrinsics
 or GCC built-ins. The plain ANSI C/C++ fallback (no threads, no atomics) still exists for new ports;
@@ -224,13 +235,18 @@ Common options: <code>LZHAM_BUILD_SHARED</code>, <code>LZHAM_BUILD_STATIC</code>
 Other configurations:
 
 * 32-bit Linux: <code>-DCMAKE_C_FLAGS=-m32 -DCMAKE_CXX_FLAGS=-m32</code>.
-* Cross-compiling ARM64/ARMv7: pass a toolchain file, or
+* Cross-compiling ARM64: pass a toolchain file, or
   <code>-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64
   -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++</code>.
   Add <code>-DCMAKE_CROSSCOMPILING_EMULATOR="qemu-aarch64;-L;/usr/aarch64-linux-gnu"</code> to run the tests under QEMU.
-* macOS universal binary: <code>-DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0</code>.
+* macOS: arm64 only (<code>-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0</code>).
 * MinGW-w64: use a toolchain file; the DLLs and test executables are linked against the static
   libgcc/libstdc++ runtime, so no extra DLLs are needed next to them.
+* Windows XP (x86 only):
+  <code>-DCMAKE_SYSTEM_NAME=Windows -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc
+  -DCMAKE_CXX_COMPILER=i686-w64-mingw32-g++ -DLZHAM_TARGET_WINDOWS_XP=ON</code>. That lowers
+  <code>_WIN32_WINNT</code> to 0x0501 and rejects 64-bit builds; the binaries then depend only on KERNEL32 and
+  msvcrt, which XP ships.
 
 Installing: <code>cmake --install build --prefix /usr/local</code> installs the headers, the libraries and a CMake
 package (<code>find_package(lzham)</code>, targets <code>lzham::lzham</code> and <code>lzham::lzham_static</code>) plus
@@ -273,3 +289,8 @@ post I could get my hands on. Especially anything related to LZ optimal parsing,
 learning how to implement optimal parsing (and you can see this if you study the progress I made in the early alphas on Google Code).</p>
 
 <p>Also, thanks to Igor Pavlov, the original creator of LZMA and 7zip, for advancing the start of the art in LZ compression.</p>
+
+[ciBadge]: https://github.com/YadeWira/lzham-ex/actions/workflows/ci.yml/badge.svg "Continuous Integration"
+[ciLink]: https://github.com/YadeWira/lzham-ex/actions/workflows/ci.yml
+[relBadge]: https://img.shields.io/github/v/release/YadeWira/lzham-ex "Latest release"
+[relLink]: https://github.com/YadeWira/lzham-ex/releases/latest

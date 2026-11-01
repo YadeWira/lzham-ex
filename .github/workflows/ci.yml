@@ -34,12 +34,6 @@ jobs:
             processor: aarch64
             cross: aarch64-linux-gnu
             emulator: "qemu-aarch64;-L;/usr/aarch64-linux-gnu"
-          - arch: armv7
-            compiler: gcc
-            packages: gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf qemu-user
-            processor: armv7l
-            cross: arm-linux-gnueabihf
-            emulator: "qemu-arm;-L;/usr/arm-linux-gnueabihf"
     steps:
       - uses: actions/checkout@v4
 
@@ -162,15 +156,6 @@ jobs:
           - name: arm64
             archs: arm64
             target: "11.0"
-            run_tests: true
-          - name: universal
-            archs: "x86_64;arm64"
-            target: "11.0"
-            run_tests: true
-          - name: x86_64
-            archs: x86_64
-            target: "10.13"
-            run_tests: false
     steps:
       - uses: actions/checkout@v4
 
@@ -185,5 +170,49 @@ jobs:
         run: cmake --build build --parallel
 
       - name: Test
-        if: matrix.run_tests
         run: ctest --test-dir build --output-on-failure
+
+  windows-xp:
+    name: Windows XP x86 (MinGW cross-build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MinGW-w64 (i686)
+        run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-i686 g++-mingw-w64-i686
+
+      - name: Configure
+        run: |
+          cmake -S . -B build-xp -DCMAKE_SYSTEM_NAME=Windows \
+            -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc \
+            -DCMAKE_CXX_COMPILER=i686-w64-mingw32-g++ \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLZHAM_TARGET_WINDOWS_XP=ON
+
+      - name: Build
+        run: cmake --build build-xp --parallel
+
+      # GitHub's runners cannot execute Windows XP, so the runtime check lives on a local XP VM. Here we
+      # assert the two properties XP requires: a subsystem version it can load, and imports that only name
+      # DLLs and functions XP ships.
+      - name: Check the binaries are XP-loadable
+        run: |
+          set -e
+          for f in build-xp/bin/Release/*.exe build-xp/bin/Release/*.dll; do
+            echo "== $f"
+            major=$(i686-w64-mingw32-objdump -p "$f" | awk '/MajorSubsystemVersion/{print $2; exit}')
+            minor=$(i686-w64-mingw32-objdump -p "$f" | awk '/MinorSubsystemVersion/{print $2; exit}')
+            echo "   subsystem $major.$minor"
+            test "$major" -lt 5 -o \( "$major" -eq 5 -a "$minor" -le 1 \)
+            dlls=$(i686-w64-mingw32-objdump -p "$f" \
+                   | sed -n 's/.*\(DLL Name\|Nombre DLL\)[[:space:]]*:[[:space:]]*//p' \
+                   | sort -u)
+            echo "   imports: $(echo $dlls)"
+            for dll in $dlls; do
+              case "$dll" in
+                KERNEL32.dll|msvcrt.dll|lzham_x86.dll) ;;
+                *) echo "   unexpected import: $dll"; exit 1 ;;
+              esac
+            done
+          done
+          echo "All binaries are XP-loadable."
