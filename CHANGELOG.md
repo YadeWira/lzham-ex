@@ -5,6 +5,40 @@ All notable changes to this fork are documented here. The format follows
 [Semantic Versioning](https://semver.org/). The public C ABI (`LZHAM_DLL_VERSION` = 0x1010) and the
 bitstream format are frozen and do not change between 1.x releases.
 
+## [1.1.1] - 2026-11-08
+
+### Fixed
+
+- **Corrupt streams could make the buffered decompressor read uninitialised memory and copy with overlapping
+  buffers.** A match distance of zero, one outside the dictionary, or one reaching back before the data
+  produced so far was masked into the ring buffer and used anyway. That could copy uninitialised heap memory to
+  the output (the dictionary is now zeroed at init and reinit), and when the masked position landed next to the
+  destination it made the decompressor call `memcpy()` with overlapping ranges (AddressSanitizer:
+  `memcpy-param-overlap`). Distances are now validated against the dictionary size and against the number of
+  bytes produced so far. Found by fuzzing the decompressor.
+- **Data races in the match finder** (found with ThreadSanitizer, 104 reports): the spin loop that waits for a
+  helper thread's matches read the match-reference array and the completed-helper counter with plain loads.
+  They are now atomic loads with acquire semantics (`atomic_load32()`), which also removes a potential
+  infinite loop on ARM, where the compiler or the CPU could keep a stale value. The lookahead tail is now
+  finalized by one thread instead of every helper thread: the writes were idempotent, but they were duplicated
+  work and a data race.
+
+### Added
+
+- `tests/fuzz_decompress.c` and `tests/fuzz_roundtrip.c`: libFuzzer targets for the decompressor and for the
+  compressor roundtrip. Build them with `-DLZHAM_BUILD_FUZZERS=ON` (Clang only, off by default).
+- `tests/test_malformed.c` plus `tests/data/malformed1.lz`: regression test that feeds the input that crashed
+  and synthetic garbage to the decompressor and checks it is rejected cleanly. Registered as
+  `lzham_malformed`.
+
+### Verified
+
+- ThreadSanitizer: clean on the whole test suite (it reported 104 races before these fixes).
+- AddressSanitizer + UndefinedBehaviorSanitizer and Valgrind: clean.
+- Fuzzing: 80,000+ decompressor inputs and 1,200+ roundtrip inputs after the fixes, no crashes.
+- Compressed output is byte-identical to 1.1.0 (36 combinations: three files x dict 15/20/26 x levels 1-4);
+  the fixes only reject invalid input.
+
 ## [1.1.0] - 2026-11-01
 
 ### Added

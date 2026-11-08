@@ -36,8 +36,8 @@ static int streaming_roundtrip(size_t src_len, unsigned dict_log2, int level, si
    size_t cmp_cap = src_len + (src_len / 2) + 4096, cmp_len = 0, dec_len = 0;
    lzham_compress_params cp;
    lzham_decompress_params dp;
-   lzham_compress_state_ptr cs;
-   lzham_decompress_state_ptr ds;
+   lzham_compress_state_ptr cs = NULL;
+   lzham_decompress_state_ptr ds = NULL;
    size_t src_ofs = 0, dec_ofs = 0;
    int result = 0;
 
@@ -164,7 +164,7 @@ static int reinit_larger_dict(void)
    size_t cmp_cap = src_len + (src_len / 8) + 65536, cmp_len = cmp_cap;
    lzham_compress_params cp;
    lzham_decompress_params dp, dp2;
-   lzham_decompress_state_ptr ds;
+   lzham_decompress_state_ptr ds = NULL;
    size_t total = 0;
    lzham_decompress_status_t st;
    int result = 0;
@@ -370,6 +370,9 @@ int main(void)
       lzham_z_stream zs, zd;
       unsigned char a[1024], b[2048];
       size_t alen = 0;
+      size_t k;
+      for (k = 0; k < sizeof(a); k++)
+         a[k] = (unsigned char)(k * 7 + 3);
       memset(&zs, 0, sizeof(zs));
       if ((lzham_z_deflateInit2(&zs, 6, LZHAM_Z_LZHAM, LZHAM_Z_DEFAULT_WINDOW_BITS, 9, LZHAM_Z_DEFAULT_STRATEGY) != LZHAM_Z_OK) ||
           (lzham_z_deflateReset(&zs) != LZHAM_Z_OK) ||

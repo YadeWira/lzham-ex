@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 
 project(lzham
-    VERSION 1.1.0
+    VERSION 1.1.1
     DESCRIPTION "LZHAM - lossless data compression codec with LZMA-like ratios and fast decompression"
     LANGUAGES C CXX)
 
@@ -22,6 +22,7 @@ option(LZHAM_BUILD_TESTS "Build lzhamtest and the CTest smoke tests" ON)
 option(LZHAM_ENABLE_MULTITHREADING "Enable multithreaded compression (Win32 threads or pthreads)" ON)
 option(LZHAM_INSTALL "Generate install rules" ON)
 option(LZHAM_TARGET_WINDOWS_XP "Target Windows XP (32-bit only, _WIN32_WINNT=0x0501)" OFF)
+option(LZHAM_BUILD_FUZZERS "Build the libFuzzer targets (Clang only, not built by default)" OFF)
 
 if(LZHAM_TARGET_WINDOWS_XP)
     if(NOT WIN32)
@@ -301,6 +302,28 @@ if(LZHAM_BUILD_TESTS)
     endif()
     add_test(NAME lzham_streaming COMMAND lzham_streaming_test)
 
+    add_executable(lzham_malformed_test tests/test_malformed.c)
+    lzham_add_xp_compat(lzham_malformed_test)
+    target_include_directories(lzham_malformed_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    if(MSVC)
+        target_compile_options(lzham_malformed_test PRIVATE /W3)
+    else()
+        target_compile_options(lzham_malformed_test PRIVATE -Wall -Wextra)
+    endif()
+    set_target_properties(lzham_malformed_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
+    if(LZHAM_BUILD_SHARED)
+        target_link_libraries(lzham_malformed_test PRIVATE lzhamdll)
+    else()
+        target_link_libraries(lzham_malformed_test PRIVATE lzhamlib)
+    endif()
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/malformed1.lz)
+        add_test(NAME lzham_malformed
+            COMMAND lzham_malformed_test ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/malformed1.lz)
+    else()
+        add_test(NAME lzham_malformed COMMAND lzham_malformed_test)
+    endif()
+
     # A second copy of the library with the element limit lowered to 8 MB, so the 4 GB compressed-stream limit
     # (upstream issue #19) can be tested in seconds instead of allocating gigabytes.
     add_library(lzham_limits STATIC
@@ -360,6 +383,34 @@ if(LZHAM_BUILD_TESTS)
                     $<TARGET_FILE:lzham_compress>
                     ${CMAKE_CURRENT_BINARY_DIR}/reference_test)
     endif()
+endif()
+
+# --- Fuzzers (opt-in) ---
+if(LZHAM_BUILD_FUZZERS)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(FATAL_ERROR "LZHAM_BUILD_FUZZERS requires Clang (libFuzzer).")
+    endif()
+    foreach(lzham_fuzzer IN ITEMS fuzz_decompress fuzz_roundtrip)
+        add_executable(${lzham_fuzzer}
+            tests/${lzham_fuzzer}.c
+            ${LZHAM_DECOMP_SOURCES}
+            ${LZHAM_COMP_SOURCES}
+            lzhamlib/lzham_lib.cpp)
+        target_include_directories(${lzham_fuzzer} PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/lzhamdecomp
+            ${CMAKE_CURRENT_SOURCE_DIR}/lzhamcomp)
+        target_compile_options(${lzham_fuzzer} PRIVATE
+            -fsanitize=fuzzer-no-link,address,undefined -fno-omit-frame-pointer -g)
+        target_compile_definitions(${lzham_fuzzer} PRIVATE _FILE_OFFSET_BITS=64 _LARGEFILE64_SOURCE=1)
+        target_link_options(${lzham_fuzzer} PRIVATE -fsanitize=fuzzer,address,undefined)
+        if(UNIX)
+            find_package(Threads REQUIRED)
+            target_link_libraries(${lzham_fuzzer} PRIVATE Threads::Threads m)
+        endif()
+        set_target_properties(${lzham_fuzzer} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/$<CONFIG>")
+    endforeach()
 endif()
 
 # --- Install ---
